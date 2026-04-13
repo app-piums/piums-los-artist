@@ -15,8 +15,7 @@ struct PiumsArtistApp: App {
             Artist.self,
             Service.self,
             Booking.self,
-            Message.self,
-            Item.self
+            Message.self
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

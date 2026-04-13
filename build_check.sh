@@ -24,8 +24,7 @@ echo "================================"
 
 SWIFT_FILES=(
     "PiumsArtist/PiumsArtistApp.swift"
-    "PiumsArtist/ContentView.swift" 
-    "PiumsArtist/Item.swift"
+    "PiumsArtist/ContentView.swift"
     "PiumsArtist/Views/MainTabView.swift"
     "PiumsArtist/Views/DashboardView.swift"
     "PiumsArtist/Views/BookingsView.swift"

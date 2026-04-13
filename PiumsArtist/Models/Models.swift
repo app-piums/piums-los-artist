@@ -8,6 +8,40 @@
 import Foundation
 import SwiftData
 
+// MARK: - Enums First (to avoid forward declaration issues)
+
+enum BookingStatus: String, CaseIterable, Codable {
+    case pending = "pending"
+    case confirmed = "confirmed"
+    case inProgress = "in_progress"
+    case completed = "completed"
+    case cancelled = "cancelled"
+    case noShow = "no_show"
+    
+    var displayName: String {
+        switch self {
+        case .pending: return "Pendiente"
+        case .confirmed: return "Confirmada"
+        case .inProgress: return "En Progreso"
+        case .completed: return "Completada"
+        case .cancelled: return "Cancelada"
+        case .noShow: return "No se presentó"
+        }
+    }
+    
+    var color: String {
+        switch self {
+        case .pending: return "orange"
+        case .confirmed: return "blue"
+        case .inProgress: return "purple"
+        case .completed: return "green"
+        case .cancelled, .noShow: return "red"
+        }
+    }
+}
+
+// MARK: - Models
+
 @Model
 final class Artist {
     var id: UUID
@@ -23,10 +57,6 @@ final class Artist {
     var isVerified: Bool
     var createdAt: Date
     var updatedAt: Date
-    
-    // Relationships
-    @Relationship(deleteRule: .cascade) var services: [Service]
-    @Relationship(deleteRule: .cascade) var bookings: [Booking]
     
     init(
         name: String,
@@ -53,8 +83,6 @@ final class Artist {
         self.isVerified = isVerified
         self.createdAt = Date()
         self.updatedAt = Date()
-        self.services = []
-        self.bookings = []
     }
 }
 
@@ -63,16 +91,12 @@ final class Service {
     var id: UUID
     var name: String
     var serviceDescription: String
-    var duration: Int // minutes
+    var duration: Int
     var price: Double
     var isActive: Bool
     var category: String
     var createdAt: Date
     var updatedAt: Date
-    
-    // Relationships
-    var artist: Artist?
-    @Relationship(deleteRule: .cascade) var bookings: [Booking]
     
     init(
         name: String,
@@ -91,7 +115,6 @@ final class Service {
         self.isActive = isActive
         self.createdAt = Date()
         self.updatedAt = Date()
-        self.bookings = []
     }
 }
 
@@ -102,17 +125,12 @@ final class Booking {
     var clientEmail: String
     var clientPhone: String
     var scheduledDate: Date
-    var duration: Int // minutes
+    var duration: Int
     var status: BookingStatus
     var totalPrice: Double
     var notes: String
     var createdAt: Date
     var updatedAt: Date
-    
-    // Relationships
-    var artist: Artist?
-    var service: Service?
-    @Relationship(deleteRule: .cascade) var messages: [Message]
     
     init(
         clientName: String,
@@ -135,7 +153,6 @@ final class Booking {
         self.notes = notes
         self.createdAt = Date()
         self.updatedAt = Date()
-        self.messages = []
     }
 }
 
@@ -146,9 +163,6 @@ final class Message {
     var isFromArtist: Bool
     var isRead: Bool
     var sentAt: Date
-    
-    // Relationships
-    var booking: Booking?
     
     init(
         content: String,
@@ -163,50 +177,7 @@ final class Message {
     }
 }
 
-// MARK: - Enums
-
-enum BookingStatus: String, CaseIterable, Codable {
-    case pending = "pending"
-    case confirmed = "confirmed"
-    case inProgress = "in_progress"
-    case completed = "completed"
-    case cancelled = "cancelled"
-    case noShow = "no_show"
-    
-    var displayName: String {
-        switch self {
-        case .pending:
-            return "Pendiente"
-        case .confirmed:
-            return "Confirmada"
-        case .inProgress:
-            return "En Progreso"
-        case .completed:
-            return "Completada"
-        case .cancelled:
-            return "Cancelada"
-        case .noShow:
-            return "No se presentó"
-        }
-    }
-    
-    var color: String {
-        switch self {
-        case .pending:
-            return "orange"
-        case .confirmed:
-            return "blue"
-        case .inProgress:
-            return "purple"
-        case .completed:
-            return "green"
-        case .cancelled, .noShow:
-            return "red"
-        }
-    }
-}
-
-// MARK: - Extensions
+// MARK: - Preview Extensions
 
 extension Artist {
     static let preview = Artist(
