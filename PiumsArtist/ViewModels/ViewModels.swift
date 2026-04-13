@@ -21,24 +21,60 @@ final class DashboardViewModel: ObservableObject {
     @Published var errorMessage: String?
     
     private var modelContext: ModelContext?
+    private let apiService = APIService.shared
     
     init() {
-        loadMockData()
+        Task {
+            await loadDashboardData()
+        }
     }
     
     func setModelContext(_ context: ModelContext) {
         self.modelContext = context
-        refreshData()
+        Task {
+            await refreshData()
+        }
     }
     
-    func refreshData() {
+    func refreshData() async {
+        await loadDashboardData()
+    }
+    
+    @MainActor
+    private func loadDashboardData() async {
         isLoading = true
+        errorMessage = nil
         
-        // Simulate API call
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            self.loadMockData()
-            self.isLoading = false
+        do {
+            // Load today's bookings
+            let todayResponse = try await apiService.get(
+                endpoint: .todayBookings,
+                responseType: APIResponse<TodayBookingsResponse>.self
+            )
+            
+            if let data = todayResponse.data {
+                self.todayBookings = data.todayBookings.map { $0.toDomainModel() }
+                self.pendingBookings = todayBookings.filter { $0.status == .pending }
+                self.monthlyEarnings = data.totalEarningsToday
+            }
+            
+            // Load completed bookings for the month
+            let completedResponse = try await apiService.get(
+                endpoint: .bookings(status: "completed"),
+                responseType: APIResponse<BookingsListResponse>.self
+            )
+            
+            if let data = completedResponse.data {
+                self.completedBookings = data.bookings.map { $0.toDomainModel() }
+            }
+            
+        } catch {
+            self.errorMessage = error.localizedDescription
+            // Fallback to mock data if API fails
+            loadMockData()
         }
+        
+        isLoading = false
     }
     
     private func loadMockData() {
@@ -97,6 +133,7 @@ final class BookingsViewModel: ObservableObject {
     @Published var errorMessage: String?
     
     private var modelContext: ModelContext?
+    private let apiService = APIService.shared
     
     enum BookingFilter: String, CaseIterable {
         case all = "Todas"
@@ -107,21 +144,45 @@ final class BookingsViewModel: ObservableObject {
     }
     
     init() {
-        loadMockData()
+        Task {
+            await loadBookings()
+        }
     }
     
     func setModelContext(_ context: ModelContext) {
         self.modelContext = context
-        refreshData()
+        Task {
+            await refreshData()
+        }
     }
     
-    func refreshData() {
+    func refreshData() async {
+        await loadBookings()
+    }
+    
+    @MainActor
+    private func loadBookings() async {
         isLoading = true
+        errorMessage = nil
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            self.loadMockData()
-            self.isLoading = false
+        do {
+            let response = try await apiService.get(
+                endpoint: .bookings(),
+                responseType: APIResponse<BookingsListResponse>.self
+            )
+            
+            if let data = response.data {
+                self.bookings = data.bookings.map { $0.toDomainModel() }
+                applyFilter()
+            }
+            
+        } catch {
+            self.errorMessage = error.localizedDescription
+            // Fallback to mock data if API fails
+            loadMockData()
         }
+        
+        isLoading = false
     }
     
     func updateFilter(_ filter: BookingFilter) {
@@ -130,32 +191,56 @@ final class BookingsViewModel: ObservableObject {
     }
     
     func acceptBooking(_ booking: Booking) {
-        // Update booking status
-        if let index = bookings.firstIndex(where: { $0.id == booking.id }) {
-            bookings[index].status = .confirmed
-            bookings[index].updatedAt = Date()
+        Task {
+            await updateBookingStatus(booking, status: "confirmed")
         }
-        applyFilter()
     }
     
     func rejectBooking(_ booking: Booking) {
-        // Update booking status
-        if let index = bookings.firstIndex(where: { $0.id == booking.id }) {
-            bookings[index].status = .cancelled
-            bookings[index].updatedAt = Date()
+        Task {
+            await updateBookingStatus(booking, status: "cancelled")
         }
-        applyFilter()
     }
     
     func completeBooking(_ booking: Booking) {
-        // Update booking status
-        if let index = bookings.firstIndex(where: { $0.id == booking.id }) {
-            bookings[index].status = .completed
-            bookings[index].updatedAt = Date()
+        Task {
+            await updateBookingStatus(booking, status: "completed")
         }
-        applyFilter()
     }
     
+    @MainActor
+    private func updateBookingStatus(_ booking: Booking, status: String) async {
+        do {
+            let request = UpdateBookingStatusRequest(status: status, notes: nil)
+            let _ = try await apiService.put(
+                endpoint: .updateBookingStatus(booking.id.uuidString, status: status),
+                body: request,
+                responseType: APIResponse<BookingDTO>.self
+            )
+            
+            // Update local booking
+            if let index = bookings.firstIndex(where: { $0.id == booking.id }) {
+                let newStatus: BookingStatus = {
+                    switch status {
+                    case "confirmed": return .confirmed
+                    case "cancelled": return .cancelled
+                    case "completed": return .completed
+                    default: return .pending
+                    }
+                }()
+                
+                bookings[index].status = newStatus
+                bookings[index].updatedAt = Date()
+            }
+            
+            applyFilter()
+            
+        } catch {
+            self.errorMessage = error.localizedDescription
+        }
+    }
+    
+    // Keep as fallback
     private func loadMockData() {
         let calendar = Calendar.current
         let today = Date()
@@ -313,6 +398,7 @@ final class MessagesViewModel: ObservableObject {
     @Published var filteredConversations: [ConversationItem] = []
     @Published var searchText = ""
     @Published var isLoading = false
+    @Published var errorMessage: String?
     
     struct ConversationItem: Identifiable {
         let id = UUID()
@@ -334,23 +420,52 @@ final class MessagesViewModel: ObservableObject {
     }
     
     private var modelContext: ModelContext?
+    private let apiService = APIService.shared
     
     init() {
-        loadMockConversations()
+        Task {
+            await loadConversations()
+        }
     }
     
     func setModelContext(_ context: ModelContext) {
         self.modelContext = context
-        refreshData()
+        Task {
+            await refreshData()
+        }
     }
     
-    func refreshData() {
+    func refreshData() async {
+        await loadConversations()
+    }
+    
+    @MainActor
+    private func loadConversations() async {
         isLoading = true
+        errorMessage = nil
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            self.loadMockConversations()
-            self.isLoading = false
+        do {
+            let response = try await apiService.get(
+                endpoint: .conversations,
+                responseType: APIResponse<[ConversationDTO]>.self
+            )
+            
+            if let conversationsData = response.data {
+                self.conversations = conversationsData.map { dto in
+                    var conversation = dto.toDomainModel()
+                    // Load messages for each conversation if needed
+                    return conversation
+                }
+                filterConversations()
+            }
+            
+        } catch {
+            self.errorMessage = error.localizedDescription
+            // Fallback to mock data if API fails
+            loadMockConversations()
         }
+        
+        isLoading = false
     }
     
     func updateSearchText(_ text: String) {
@@ -359,19 +474,34 @@ final class MessagesViewModel: ObservableObject {
     }
     
     func sendMessage(_ content: String, to conversationId: UUID) {
-        if let index = conversations.firstIndex(where: { $0.id == conversationId }) {
-            let newMessage = MessageItem(
-                content: content,
-                isFromArtist: true,
-                timestamp: Date(),
-                isRead: true
-            )
-            
-            conversations[index].messages.append(newMessage)
-            filterConversations()
+        Task {
+            await sendMessageAPI(content, to: conversationId)
         }
     }
     
+    @MainActor
+    private func sendMessageAPI(_ content: String, to conversationId: UUID) async {
+        do {
+            let request = SendMessageRequest(content: content)
+            let response = try await apiService.post(
+                endpoint: .sendMessage(conversationId: conversationId.uuidString),
+                body: request,
+                responseType: APIResponse<SendMessageResponse>.self
+            )
+            
+            if let data = response.data,
+               let index = conversations.firstIndex(where: { $0.id == conversationId }) {
+                let newMessage = data.message.toDomainModel()
+                conversations[index].messages.append(newMessage)
+                filterConversations()
+            }
+            
+        } catch {
+            self.errorMessage = error.localizedDescription
+        }
+    }
+    
+    // Keep as fallback
     private func loadMockConversations() {
         let calendar = Calendar.current
         
@@ -424,37 +554,116 @@ final class ProfileViewModel: ObservableObject {
     @Published var errorMessage: String?
     
     struct ProfileStatistics {
-        var totalClients: Int = 1234
-        var completedServices: Int = 2156
-        var monthlyEarnings: Double = 3250.0
-        var averageRating: Double = 4.8
+        var totalClients: Int = 0
+        var completedServices: Int = 0
+        var monthlyEarnings: Double = 0.0
+        var averageRating: Double = 0.0
     }
     
     private var modelContext: ModelContext?
+    private let apiService = APIService.shared
     
     init() {
-        loadMockData()
+        Task {
+            await loadProfileData()
+        }
     }
     
     func setModelContext(_ context: ModelContext) {
         self.modelContext = context
-        refreshData()
-    }
-    
-    func refreshData() {
-        isLoading = true
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            self.loadMockData()
-            self.isLoading = false
+        Task {
+            await refreshData()
         }
     }
     
-    func updateProfile(_ updatedArtist: Artist) {
-        artist = updatedArtist
-        // Save to model context if available
+    func refreshData() async {
+        await loadProfileData()
     }
     
+    @MainActor
+    private func loadProfileData() async {
+        isLoading = true
+        errorMessage = nil
+        
+        do {
+            // Load artist profile
+            let profileResponse = try await apiService.get(
+                endpoint: .artistProfile,
+                responseType: APIResponse<ArtistDTO>.self
+            )
+            
+            if let profileData = profileResponse.data {
+                self.artist = profileData.toDomainModel()
+            }
+            
+            // Load artist statistics
+            let statsResponse = try await apiService.get(
+                endpoint: .artistStatistics,
+                responseType: APIResponse<ArtistStatisticsDTO>.self
+            )
+            
+            if let statsData = statsResponse.data {
+                self.statistics = ProfileStatistics(
+                    totalClients: statsData.totalClients,
+                    completedServices: statsData.completedServices,
+                    monthlyEarnings: statsData.monthlyEarnings,
+                    averageRating: statsData.averageRating
+                )
+            }
+            
+            // Load services
+            let servicesResponse = try await apiService.get(
+                endpoint: .services,
+                responseType: APIResponse<[ServiceDTO]>.self
+            )
+            
+            if let servicesData = servicesResponse.data {
+                self.services = servicesData.map { $0.toDomainModel() }
+            }
+            
+        } catch {
+            self.errorMessage = error.localizedDescription
+            // Fallback to mock data if API fails
+            loadMockData()
+        }
+        
+        isLoading = false
+    }
+    
+    func updateProfile(_ updatedArtist: Artist) {
+        Task {
+            await saveProfile(updatedArtist)
+        }
+    }
+    
+    @MainActor
+    private func saveProfile(_ updatedArtist: Artist) async {
+        do {
+            let request = UpdateArtistProfileRequest(
+                name: updatedArtist.name,
+                phone: updatedArtist.phone,
+                profession: updatedArtist.profession,
+                specialty: updatedArtist.specialty,
+                bio: updatedArtist.bio,
+                yearsOfExperience: updatedArtist.yearsOfExperience
+            )
+            
+            let response = try await apiService.put(
+                endpoint: .updateProfile,
+                body: request,
+                responseType: APIResponse<ArtistDTO>.self
+            )
+            
+            if let data = response.data {
+                self.artist = data.toDomainModel()
+            }
+            
+        } catch {
+            self.errorMessage = error.localizedDescription
+        }
+    }
+    
+    // Keep as fallback
     private func loadMockData() {
         artist = Artist.preview
         services = Service.previewServices

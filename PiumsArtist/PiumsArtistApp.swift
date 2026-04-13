@@ -29,6 +29,9 @@ struct PiumsArtistApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .errorHandling()
+                .environmentObject(ErrorHandler.shared)
+                .environmentObject(NetworkMonitor.shared)
         }
         .modelContainer(sharedModelContainer)
     }

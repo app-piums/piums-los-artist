@@ -10,9 +10,17 @@ import SwiftData
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
+    @StateObject private var authService = AuthService.shared
 
     var body: some View {
-        MainTabView()
+        AuthenticatedView {
+            MainTabView()
+        }
+        .onAppear {
+            Task {
+                await authService.attemptAutoLogin()
+            }
+        }
     }
 }
 
