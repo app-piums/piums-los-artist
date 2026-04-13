@@ -57,10 +57,12 @@ final class AuthService: ObservableObject {
             // Store auth token
             apiService.authToken = response.token
             
-            // Store refresh token
-            UserDefaults.standard.set(response.refreshToken, forKey: "refresh_token")
+            // Store refresh token (optional in this backend)
+            if let refreshToken = response.refreshToken {
+                UserDefaults.standard.set(refreshToken, forKey: "refresh_token")
+            }
             
-            // Store user data - convert to Artist for backwards compatibility
+            // Store user data
             currentArtist = response.user.toDomainModel()
             
             // Store credentials if remember me is enabled
@@ -72,8 +74,8 @@ final class AuthService: ObservableObject {
                 self.rememberMe = false
             }
             
-            // Parse expires time (comes as string like "15m")
-            let expiresInSeconds = parseExpiresIn(response.expiresIn)
+            // Parse expires time if provided (e.g. "15m"), default 15min
+            let expiresInSeconds = parseExpiresIn(response.expiresIn ?? "15m")
             scheduleTokenRefresh(expiresIn: expiresInSeconds)
             
         } catch {
@@ -132,13 +134,15 @@ final class AuthService: ObservableObject {
             
             // Update tokens
             apiService.authToken = response.token
-            UserDefaults.standard.set(response.refreshToken, forKey: "refresh_token")
+            if let rt = response.refreshToken {
+                UserDefaults.standard.set(rt, forKey: "refresh_token")
+            }
             
             // Update user data
             currentArtist = response.user.toDomainModel()
             
             // Schedule next refresh
-            let expiresInSeconds = parseExpiresIn(response.expiresIn)
+            let expiresInSeconds = parseExpiresIn(response.expiresIn ?? "15m")
             scheduleTokenRefresh(expiresIn: expiresInSeconds)
             
         } catch {

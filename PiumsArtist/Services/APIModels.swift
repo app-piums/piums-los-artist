@@ -22,10 +22,12 @@ struct LoginRequest: Codable {
 }
 
 struct AuthResponse: Codable {
+    let success: Bool?
     let token: String
-    let refreshToken: String
+    let refreshToken: String?
     let user: UserDTO
-    let expiresIn: String
+    let expiresIn: String?
+    let message: String?
 }
 
 struct RefreshTokenRequest: Codable {
@@ -36,13 +38,21 @@ struct RefreshTokenRequest: Codable {
 struct UserDTO: Codable {
     let id: String
     let email: String
-    let name: String
+    // Backend puede enviar "nombre" o "name"
+    let nombre: String?
+    let name: String?
     let role: String
     let avatar: String?
     let phone: String?
-    let emailVerified: Bool
-    let createdAt: String
-    let updatedAt: String
+    let emailVerified: Bool?
+    let status: String?
+    let createdAt: String?
+    let updatedAt: String?
+    
+    // Helper para obtener el nombre sin importar qué campo use el backend
+    var displayName: String {
+        nombre ?? name ?? email
+    }
 }
 
 struct UpdateUserRequest: Codable {
@@ -353,16 +363,16 @@ struct HealthCheckDTO: Codable {
 extension UserDTO {
     func toDomainModel() -> Artist {
         return Artist(
-            name: name,
+            name: displayName,
             email: email,
             phone: phone ?? "",
-            profession: "Artist", // Default for backwards compatibility
-            specialty: "General", // Default for backwards compatibility
+            profession: "Artist",
+            specialty: "General",
             bio: "",
             rating: 0.0,
             totalReviews: 0,
             yearsOfExperience: 0,
-            isVerified: emailVerified
+            isVerified: emailVerified ?? false
         )
     }
 }
