@@ -12,7 +12,11 @@ import SwiftData
 struct PiumsArtistApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            Artist.self,
+            Service.self,
+            Booking.self,
+            Message.self,
+            Item.self
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
