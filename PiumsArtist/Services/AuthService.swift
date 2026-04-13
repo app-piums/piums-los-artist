@@ -51,21 +51,17 @@ final class AuthService: ObservableObject {
             let response = try await apiService.post(
                 endpoint: .login,
                 body: request,
-                responseType: APIResponse<LoginResponse>.self
+                responseType: AuthResponse.self
             )
             
-            guard let loginData = response.data else {
-                throw APIError.noData
-            }
-            
             // Store auth token
-            apiService.authToken = loginData.token
+            apiService.authToken = response.token
             
             // Store refresh token
-            UserDefaults.standard.set(loginData.refreshToken, forKey: "refresh_token")
+            UserDefaults.standard.set(response.refreshToken, forKey: "refresh_token")
             
-            // Store user data
-            currentArtist = loginData.artist.toDomainModel()
+            // Store user data - convert to Artist for backwards compatibility
+            currentArtist = response.user.toDomainModel()
             
             // Store credentials if remember me is enabled
             if rememberMe {
@@ -76,8 +72,9 @@ final class AuthService: ObservableObject {
                 self.rememberMe = false
             }
             
-            // Schedule token refresh
-            scheduleTokenRefresh(expiresIn: loginData.expiresIn)
+            // Parse expires time (comes as string like "15m")
+            let expiresInSeconds = parseExpiresIn(response.expiresIn)
+            scheduleTokenRefresh(expiresIn: expiresInSeconds)
             
         } catch {
             if let apiError = error as? APIError {
@@ -94,10 +91,10 @@ final class AuthService: ObservableObject {
         Task {
             // Call logout endpoint
             do {
-                let _ = try await apiService.request(
+                let _: SuccessResponseDTO = try await apiService.request(
                     endpoint: .logout,
                     method: .POST,
-                    responseType: SuccessResponse.self
+                    responseType: SuccessResponseDTO.self
                 )
             } catch {
                 print("Logout API call failed: \(error)")
@@ -130,26 +127,44 @@ final class AuthService: ObservableObject {
             let response = try await apiService.post(
                 endpoint: .refreshToken,
                 body: request,
-                responseType: APIResponse<LoginResponse>.self
+                responseType: AuthResponse.self
             )
             
-            guard let loginData = response.data else {
-                throw APIError.noData
-            }
-            
             // Update tokens
-            apiService.authToken = loginData.token
-            UserDefaults.standard.set(loginData.refreshToken, forKey: "refresh_token")
+            apiService.authToken = response.token
+            UserDefaults.standard.set(response.refreshToken, forKey: "refresh_token")
             
             // Update user data
-            currentArtist = loginData.artist.toDomainModel()
+            currentArtist = response.user.toDomainModel()
             
             // Schedule next refresh
-            scheduleTokenRefresh(expiresIn: loginData.expiresIn)
+            let expiresInSeconds = parseExpiresIn(response.expiresIn)
+            scheduleTokenRefresh(expiresIn: expiresInSeconds)
             
         } catch {
             // If refresh fails, logout user
             await logout()
+        }
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func parseExpiresIn(_ expiresString: String) -> Int {
+        // Parse strings like "15m", "1h", "7d" to seconds
+        let number = Int(expiresString.dropLast()) ?? 15
+        let unit = String(expiresString.suffix(1))
+        
+        switch unit {
+        case "s":
+            return number
+        case "m":
+            return number * 60
+        case "h":
+            return number * 3600
+        case "d":
+            return number * 86400
+        default:
+            return 900 // Default 15 minutes
         }
     }
     
@@ -159,15 +174,13 @@ final class AuthService: ObservableObject {
         }
         
         do {
-            // Try to fetch current artist profile to validate token
+            // Try to fetch current user profile to validate token
             let response = try await apiService.get(
-                endpoint: .artistProfile,
-                responseType: APIResponse<ArtistDTO>.self
+                endpoint: .userProfile,
+                responseType: UserDTO.self
             )
             
-            if let artistData = response.data {
-                currentArtist = artistData.toDomainModel()
-            }
+            currentArtist = response.toDomainModel()
             
         } catch {
             // Token is invalid, try to refresh

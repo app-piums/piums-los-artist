@@ -8,340 +8,378 @@
 import Foundation
 
 // MARK: - Authentication DTOs
+struct RegisterRequest: Codable {
+    let email: String
+    let password: String
+    let name: String
+    let role: String // CLIENT, ARTIST, ADMIN
+    let phone: String?
+}
+
 struct LoginRequest: Codable {
     let email: String
     let password: String
 }
 
-struct LoginResponse: Codable {
+struct AuthResponse: Codable {
     let token: String
     let refreshToken: String
-    let expiresIn: Int
-    let artist: ArtistDTO
+    let user: UserDTO
+    let expiresIn: String
 }
 
 struct RefreshTokenRequest: Codable {
     let refreshToken: String
 }
 
+// MARK: - User DTOs
+struct UserDTO: Codable {
+    let id: String
+    let email: String
+    let name: String
+    let role: String
+    let avatar: String?
+    let phone: String?
+    let emailVerified: Bool
+    let createdAt: String
+    let updatedAt: String
+}
+
+struct UpdateUserRequest: Codable {
+    let name: String?
+    let phone: String?
+    let bio: String?
+    let location: String?
+}
+
+struct NotificationSettingsDTO: Codable {
+    let emailNotifications: Bool
+    let smsNotifications: Bool
+    let pushNotifications: Bool
+}
+
 // MARK: - Artist DTOs
 struct ArtistDTO: Codable {
     let id: String
-    let name: String
-    let email: String
-    let phone: String?
-    let profession: String
-    let specialty: String
-    let bio: String?
+    let userId: String
+    let stageName: String
+    let bio: String
+    let specialties: [String]
+    let location: LocationDTO?
     let rating: Double
-    let totalReviews: Int
-    let yearsOfExperience: Int
-    let isVerified: Bool
-    let profileImageURL: String?
+    let reviewCount: Int
+    let verified: Bool
+    let portfolio: [String]
+    let socialLinks: SocialLinksDTO?
     let createdAt: String
-    let updatedAt: String
-    
-    enum CodingKeys: String, CodingKey {
-        case id, name, email, phone, profession, specialty, bio, rating
-        case totalReviews = "total_reviews"
-        case yearsOfExperience = "years_of_experience"
-        case isVerified = "is_verified"
-        case profileImageURL = "profile_image_url"
-        case createdAt = "created_at"
-        case updatedAt = "updated_at"
-    }
 }
 
-struct UpdateArtistProfileRequest: Codable {
-    let name: String?
-    let phone: String?
-    let profession: String?
-    let specialty: String?
-    let bio: String?
-    let yearsOfExperience: Int?
+struct LocationDTO: Codable {
+    let city: String
+    let country: String
+    let coordinates: CoordinatesDTO?
 }
 
-struct ArtistStatisticsDTO: Codable {
-    let totalClients: Int
-    let completedServices: Int
-    let monthlyEarnings: Double
-    let averageRating: Double
-    let totalBookings: Int
-    let pendingBookings: Int
-    let confirmedBookings: Int
-    let completedBookingsThisMonth: Int
-    let earningsThisMonth: Double
-    let earningsLastMonth: Double
-    let growthPercentage: Double
-    
-    enum CodingKeys: String, CodingKey {
-        case totalClients = "total_clients"
-        case completedServices = "completed_services"
-        case monthlyEarnings = "monthly_earnings"
-        case averageRating = "average_rating"
-        case totalBookings = "total_bookings"
-        case pendingBookings = "pending_bookings"
-        case confirmedBookings = "confirmed_bookings"
-        case completedBookingsThisMonth = "completed_bookings_this_month"
-        case earningsThisMonth = "earnings_this_month"
-        case earningsLastMonth = "earnings_last_month"
-        case growthPercentage = "growth_percentage"
-    }
+struct CoordinatesDTO: Codable {
+    let lat: Double
+    let lng: Double
+}
+
+struct SocialLinksDTO: Codable {
+    let instagram: String?
+    let youtube: String?
+    let tiktok: String?
+}
+
+struct CreateArtistRequest: Codable {
+    let stageName: String
+    let bio: String
+    let specialties: [String]
+    let location: LocationDTO?
+}
+
+struct ArtistDashboardDTO: Codable {
+    let bookings: BookingStatsDTO
+    let revenue: RevenueStatsDTO
+    let rating: RatingStatsDTO
+}
+
+struct BookingStatsDTO: Codable {
+    let total: Int
+    let pending: Int
+    let confirmed: Int
+}
+
+struct RevenueStatsDTO: Codable {
+    let total: Double
+    let thisMonth: Double
+    let currency: String
+}
+
+struct RatingStatsDTO: Codable {
+    let average: Double
+    let count: Int
+}
+
+// MARK: - Service DTOs
+struct ServiceDTO: Codable {
+    let id: String
+    let artistId: String
+    let title: String
+    let description: String
+    let category: String // MUSIC, DANCE, MAGIC, JUGGLING, PAINTING, COMEDY, OTHER
+    let duration: Int // minutes
+    let price: Double
+    let currency: String
+    let availability: AvailabilityDTO?
+    let active: Bool
+    let images: [String]
+}
+
+struct AvailabilityDTO: Codable {
+    let monday: [String]?
+    let tuesday: [String]?
+    let wednesday: [String]?
+    let thursday: [String]?
+    let friday: [String]?
+    let saturday: [String]?
+    let sunday: [String]?
+}
+
+struct CreateServiceRequest: Codable {
+    let title: String
+    let description: String
+    let category: String
+    let duration: Int
+    let price: Double
 }
 
 // MARK: - Booking DTOs
 struct BookingDTO: Codable {
     let id: String
-    let clientName: String
-    let clientEmail: String
-    let clientPhone: String?
-    let scheduledDate: String // ISO8601 format
-    let duration: Int // minutes
-    let status: String
-    let totalPrice: Double
-    let notes: String?
-    let serviceId: String?
-    let serviceName: String?
-    let createdAt: String
-    let updatedAt: String
-    
-    enum CodingKeys: String, CodingKey {
-        case id
-        case clientName = "client_name"
-        case clientEmail = "client_email"
-        case clientPhone = "client_phone"
-        case scheduledDate = "scheduled_date"
-        case duration, status
-        case totalPrice = "total_price"
-        case notes
-        case serviceId = "service_id"
-        case serviceName = "service_name"
-        case createdAt = "created_at"
-        case updatedAt = "updated_at"
-    }
-}
-
-struct BookingsListResponse: Codable {
-    let bookings: [BookingDTO]
-    let pagination: PaginationDTO
-}
-
-struct UpdateBookingStatusRequest: Codable {
-    let status: String
-    let notes: String?
-}
-
-struct TodayBookingsResponse: Codable {
-    let todayBookings: [BookingDTO]
-    let pendingCount: Int
-    let confirmedCount: Int
-    let completedCount: Int
-    let totalEarningsToday: Double
-    
-    enum CodingKeys: String, CodingKey {
-        case todayBookings = "today_bookings"
-        case pendingCount = "pending_count"
-        case confirmedCount = "confirmed_count"
-        case completedCount = "completed_count"
-        case totalEarningsToday = "total_earnings_today"
-    }
-}
-
-// MARK: - Calendar & Availability DTOs
-struct AvailabilityDTO: Codable {
-    let id: String?
+    let clientId: String
+    let artistId: String
+    let serviceId: String
     let date: String // YYYY-MM-DD format
-    let timeSlots: [TimeSlotDTO]
-    let isAvailable: Bool
-    
-    enum CodingKeys: String, CodingKey {
-        case id, date
-        case timeSlots = "time_slots"
-        case isAvailable = "is_available"
-    }
-}
-
-struct TimeSlotDTO: Codable {
-    let id: String?
     let time: String // HH:mm format
-    let isAvailable: Bool
-    let isBooked: Bool
-    let bookingId: String?
-    
-    enum CodingKeys: String, CodingKey {
-        case id, time
-        case isAvailable = "is_available"
-        case isBooked = "is_booked"
-        case bookingId = "booking_id"
-    }
+    let duration: Int
+    let location: BookingLocationDTO
+    let price: Double
+    let status: String // PENDING, CONFIRMED, CANCELLED, COMPLETED, RESCHEDULED
+    let paymentStatus: String // PENDING, PAID, REFUNDED, FAILED
+    let confirmationCode: String
+    let notes: String?
+    let rescheduledAt: String?
+    let rescheduleReason: String?
+    let rescheduleCount: Int
+    let createdAt: String
 }
 
-struct UpdateAvailabilityRequest: Codable {
+struct BookingLocationDTO: Codable {
+    let address: String
+    let city: String
+    let postalCode: String?
+    let coordinates: CoordinatesDTO?
+}
+
+struct CreateBookingRequest: Codable {
+    let artistId: String
+    let serviceId: String
     let date: String
-    let timeSlots: [UpdateTimeSlotRequest]
-    
-    enum CodingKeys: String, CodingKey {
-        case date
-        case timeSlots = "time_slots"
-    }
-}
-
-struct UpdateTimeSlotRequest: Codable {
     let time: String
-    let isAvailable: Bool
+    let location: BookingLocationDTO
+    let notes: String?
 }
 
-// MARK: - Messages DTOs
+struct RescheduleBookingRequest: Codable {
+    let newDate: String
+    let newTime: String
+    let reason: String?
+}
+
+// MARK: - Payment DTOs
+struct PaymentMethodDTO: Codable {
+    let id: String
+    let userId: String
+    let type: String // CARD, PAYPAL, BANK_TRANSFER
+    let last4: String?
+    let brand: String?
+    let expiryMonth: Int?
+    let expiryYear: Int?
+    let isDefault: Bool
+    let stripePaymentMethodId: String?
+    let createdAt: String
+}
+
+struct AddPaymentMethodRequest: Codable {
+    let stripePaymentMethodId: String
+    let setAsDefault: Bool?
+}
+
+struct PaymentDTO: Codable {
+    let id: String
+    let bookingId: String
+    let amount: Double
+    let currency: String
+    let status: String // PENDING, PROCESSING, COMPLETED, FAILED, REFUNDED
+    let paymentMethodId: String
+    let stripePaymentIntentId: String?
+    let createdAt: String
+}
+
+struct ProcessPaymentRequest: Codable {
+    let bookingId: String
+    let paymentMethodId: String
+}
+
+// MARK: - Review DTOs
+struct ReviewDTO: Codable {
+    let id: String
+    let bookingId: String
+    let artistId: String
+    let clientId: String
+    let rating: Int // 1-5
+    let comment: String?
+    let response: String?
+    let images: [String]?
+    let helpful: Int
+    let createdAt: String
+}
+
+struct CreateReviewRequest: Codable {
+    let bookingId: String
+    let rating: Int
+    let comment: String?
+    let images: [String]?
+}
+
+struct RespondToReviewRequest: Codable {
+    let response: String
+}
+
+// MARK: - Notification DTOs
+struct NotificationDTO: Codable {
+    let id: String
+    let userId: String
+    let type: String // BOOKING_CONFIRMED, BOOKING_CANCELLED, PAYMENT_RECEIVED, REVIEW_RECEIVED, MESSAGE_RECEIVED
+    let title: String
+    let message: String
+    let read: Bool
+    let data: [String: String]?
+    let createdAt: String
+}
+
+// MARK: - Chat DTOs
 struct ConversationDTO: Codable {
     let id: String
-    let clientName: String
-    let clientEmail: String
-    let clientAvatar: String?
+    let participants: [String]
     let lastMessage: MessageDTO?
     let unreadCount: Int
-    let isOnline: Bool
     let createdAt: String
     let updatedAt: String
-    
-    enum CodingKeys: String, CodingKey {
-        case id
-        case clientName = "client_name"
-        case clientEmail = "client_email"
-        case clientAvatar = "client_avatar"
-        case lastMessage = "last_message"
-        case unreadCount = "unread_count"
-        case isOnline = "is_online"
-        case createdAt = "created_at"
-        case updatedAt = "updated_at"
-    }
 }
 
 struct MessageDTO: Codable {
     let id: String
-    let content: String
-    let isFromArtist: Bool
-    let isRead: Bool
-    let sentAt: String
     let conversationId: String
-    
-    enum CodingKeys: String, CodingKey {
-        case id, content
-        case isFromArtist = "is_from_artist"
-        case isRead = "is_read"
-        case sentAt = "sent_at"
-        case conversationId = "conversation_id"
-    }
+    let senderId: String
+    let content: String
+    let type: String // TEXT, IMAGE, FILE
+    let read: Bool
+    let createdAt: String
 }
 
-struct ConversationDetailResponse: Codable {
-    let conversation: ConversationDTO
-    let messages: [MessageDTO]
-    let pagination: PaginationDTO
+struct CreateConversationRequest: Codable {
+    let participantId: String
 }
 
 struct SendMessageRequest: Codable {
+    let conversationId: String
     let content: String
+    let type: String? // defaults to TEXT
 }
 
-struct SendMessageResponse: Codable {
-    let message: MessageDTO
-    let conversation: ConversationDTO
-}
-
-// MARK: - Services DTOs
-struct ServiceDTO: Codable {
-    let id: String
-    let name: String
-    let description: String
-    let duration: Int // minutes
-    let price: Double
-    let category: String
-    let isActive: Bool
-    let imageURL: String?
-    let createdAt: String
-    let updatedAt: String
-    
-    enum CodingKeys: String, CodingKey {
-        case id, name, description, duration, price, category
-        case isActive = "is_active"
-        case imageURL = "image_url"
-        case createdAt = "created_at"
-        case updatedAt = "updated_at"
-    }
-}
-
-struct CreateServiceRequest: Codable {
-    let name: String
-    let description: String
-    let duration: Int
-    let price: Double
-    let category: String
-    let isActive: Bool
-    
-    enum CodingKeys: String, CodingKey {
-        case name, description, duration, price, category
-        case isActive = "is_active"
-    }
-}
-
-struct UpdateServiceRequest: Codable {
-    let name: String?
-    let description: String?
-    let duration: Int?
-    let price: Double?
+// MARK: - Search DTOs
+struct SearchFiltersDTO: Codable {
+    let query: String?
     let category: String?
-    let isActive: Bool?
-    
-    enum CodingKeys: String, CodingKey {
-        case name, description, duration, price, category
-        case isActive = "is_active"
-    }
+    let location: String?
+    let priceMin: Double?
+    let priceMax: Double?
+    let rating: Double?
+    let availability: String?
+    let sort: String? // relevance, price_asc, price_desc, rating, reviews
+    let page: Int?
+    let limit: Int?
 }
 
 // MARK: - Common DTOs
+struct PaginatedResponseDTO<T: Codable>: Codable {
+    let data: [T]
+    let pagination: PaginationDTO
+}
+
 struct PaginationDTO: Codable {
     let page: Int
     let limit: Int
     let total: Int
-    let totalPages: Int
-    let hasNext: Bool
-    let hasPrevious: Bool
-    
-    enum CodingKeys: String, CodingKey {
-        case page, limit, total
-        case totalPages = "total_pages"
-        case hasNext = "has_next"
-        case hasPrevious = "has_previous"
-    }
+    let pages: Int
 }
 
-struct ErrorResponse: Codable {
-    let success: Bool
+struct ErrorResponseDTO: Codable {
+    let error: String
     let message: String
-    let errors: [String]?
-    let code: String?
+    let details: [ErrorDetailDTO]?
 }
 
-struct SuccessResponse: Codable {
-    let success: Bool
+struct ErrorDetailDTO: Codable {
+    let field: String?
     let message: String
+}
+
+struct SuccessResponseDTO: Codable {
+    let status: String
+    let message: String?
+}
+
+// MARK: - Health Check DTO
+struct HealthCheckDTO: Codable {
+    let status: String
+    let timestamp: String
 }
 
 // MARK: - Extensions for Conversion to Domain Models
 
-extension ArtistDTO {
+extension UserDTO {
     func toDomainModel() -> Artist {
         return Artist(
             name: name,
             email: email,
             phone: phone ?? "",
-            profession: profession,
-            specialty: specialty,
-            bio: bio ?? "",
+            profession: "Artist", // Default for backwards compatibility
+            specialty: "General", // Default for backwards compatibility
+            bio: "",
+            rating: 0.0,
+            totalReviews: 0,
+            yearsOfExperience: 0,
+            isVerified: emailVerified
+        )
+    }
+}
+
+extension ArtistDTO {
+    func toDomainModel() -> Artist {
+        return Artist(
+            name: stageName,
+            email: "", // Will be filled from UserDTO
+            phone: "",
+            profession: specialties.first ?? "Artist",
+            specialty: specialties.joined(separator: ", "),
+            bio: bio,
             rating: rating,
-            totalReviews: totalReviews,
-            yearsOfExperience: yearsOfExperience,
-            isVerified: isVerified
+            totalReviews: reviewCount,
+            yearsOfExperience: 0, // Not available in new API
+            isVerified: verified
         )
     }
 }
@@ -349,27 +387,27 @@ extension ArtistDTO {
 extension BookingDTO {
     func toDomainModel() -> Booking {
         let dateFormatter = ISO8601DateFormatter()
-        let date = dateFormatter.date(from: scheduledDate) ?? Date()
+        let dateString = "\(date)T\(time):00.000Z"
+        let scheduledDate = dateFormatter.date(from: dateString) ?? Date()
         
         let bookingStatus: BookingStatus = {
-            switch status.lowercased() {
-            case "pending": return .pending
-            case "confirmed": return .confirmed
-            case "in_progress": return .inProgress
-            case "completed": return .completed
-            case "cancelled": return .cancelled
-            case "no_show": return .noShow
+            switch status.uppercased() {
+            case "PENDING": return .pending
+            case "CONFIRMED": return .confirmed
+            case "CANCELLED": return .cancelled
+            case "COMPLETED": return .completed
+            case "RESCHEDULED": return .pending // Map to pending for now
             default: return .pending
             }
         }()
         
         return Booking(
-            clientName: clientName,
-            clientEmail: clientEmail,
-            clientPhone: clientPhone ?? "",
-            scheduledDate: date,
+            clientName: "Client", // Not available in new API, would need separate call
+            clientEmail: "",
+            clientPhone: "",
+            scheduledDate: scheduledDate,
             duration: duration,
-            totalPrice: totalPrice,
+            totalPrice: price,
             notes: notes ?? "",
             status: bookingStatus
         )
@@ -379,22 +417,12 @@ extension BookingDTO {
 extension ServiceDTO {
     func toDomainModel() -> Service {
         return Service(
-            name: name,
+            name: title,
             description: description,
             duration: duration,
             price: price,
             category: category,
-            isActive: isActive
-        )
-    }
-}
-
-extension TimeSlotDTO {
-    func toDomainModel() -> CalendarViewModel.TimeSlot {
-        return CalendarViewModel.TimeSlot(
-            time: time,
-            isAvailable: isAvailable,
-            isBooked: isBooked
+            isActive: active
         )
     }
 }
@@ -402,15 +430,16 @@ extension TimeSlotDTO {
 extension ConversationDTO {
     func toDomainModel() -> MessagesViewModel.ConversationItem {
         let lastMessageText = lastMessage?.content ?? ""
-        let timestamp = ISO8601DateFormatter().date(from: updatedAt) ?? Date()
+        let dateFormatter = ISO8601DateFormatter()
+        let timestamp = dateFormatter.date(from: updatedAt) ?? Date()
         
         return MessagesViewModel.ConversationItem(
-            clientName: clientName,
-            clientEmail: clientEmail,
+            clientName: "Client", // Would need separate API call to get client details
+            clientEmail: "",
             lastMessage: lastMessageText,
             timestamp: timestamp,
             unreadCount: unreadCount,
-            isOnline: isOnline,
+            isOnline: false, // Not available in new API
             messages: []
         )
     }
@@ -418,13 +447,20 @@ extension ConversationDTO {
 
 extension MessageDTO {
     func toDomainModel() -> MessagesViewModel.MessageItem {
-        let timestamp = ISO8601DateFormatter().date(from: sentAt) ?? Date()
+        let dateFormatter = ISO8601DateFormatter()
+        let timestamp = dateFormatter.date(from: createdAt) ?? Date()
         
         return MessagesViewModel.MessageItem(
             content: content,
-            isFromArtist: isFromArtist,
+            isFromArtist: false, // Would need to check against current user ID
             timestamp: timestamp,
-            isRead: isRead
+            isRead: read
         )
+    }
+}
+
+extension ArtistDashboardDTO {
+    func toDashboardStats() -> (BookingStatsDTO, RevenueStatsDTO, RatingStatsDTO) {
+        return (bookings, revenue, rating)
     }
 }
