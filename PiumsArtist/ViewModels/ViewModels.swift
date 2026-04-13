@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import SwiftData
+import Combine
 
 // MARK: - Dashboard ViewModel
 @MainActor

@@ -12,7 +12,7 @@ struct ProfileView: View {
     @State private var showingEditProfile = false
     
     // Mock artist data
-    @State private var artist = Artist(
+    @State private var artist = ArtistData(
         name: "María González",
         profession: "Estilista Profesional",
         rating: 4.8,
@@ -120,7 +120,7 @@ struct ProfileView: View {
     }
 }
 
-struct Artist {
+struct ArtistData {
     var name: String
     var profession: String
     let rating: Double
@@ -331,11 +331,11 @@ struct SettingsRow: View {
 }
 
 struct EditProfileView: View {
-    @Binding var artist: Artist
+    @Binding var artist: ArtistData
     @Environment(\.presentationMode) var presentationMode
-    @State private var tempArtist: Artist
+    @State private var tempArtist: ArtistData
     
-    init(artist: Binding<Artist>) {
+    init(artist: Binding<ArtistData>) {
         self._artist = artist
         self._tempArtist = State(initialValue: artist.wrappedValue)
     }
