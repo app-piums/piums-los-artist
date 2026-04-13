@@ -13,6 +13,7 @@ extension Color {
     static let piumsPrimary = Color(hex: "#6366F1") // Modern Indigo
     static let piumsSecondary = Color(hex: "#8B5CF6") // Purple
     static let piumsAccent = Color(hex: "#F59E0B") // Amber
+    static let piumsOrange = Color(hex: "#FF6B35") // Brand Orange (from client app)
     
     // UI Colors
     static let piumsBackground = Color(.systemBackground)
@@ -719,6 +720,167 @@ struct PiumsNavigationBar: View {
     }
 }
 
+// MARK: - Availability Badge (inspirado en cliente)
+struct PiumsAvailabilityBadge: View {
+    let isAvailable: Bool
+    let size: BadgeSize
+    
+    enum BadgeSize {
+        case small, medium, large
+        
+        var metrics: (font: Font, padding: EdgeInsets) {
+            switch self {
+            case .small:
+                return (.caption2.weight(.bold), EdgeInsets(top: 3, leading: 8, bottom: 3, trailing: 8))
+            case .medium:
+                return (.caption.weight(.bold), EdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10))
+            case .large:
+                return (.subheadline.weight(.bold), EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
+            }
+        }
+    }
+    
+    init(isAvailable: Bool, size: BadgeSize = .medium) {
+        self.isAvailable = isAvailable
+        self.size = size
+    }
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(isAvailable ? Color.piumsSuccess : Color.piumsError)
+                .frame(width: 6, height: 6)
+            
+            Text(isAvailable ? "Disponible" : "Ocupado")
+                .font(size.metrics.font)
+        }
+        .foregroundColor(.white)
+        .padding(size.metrics.padding)
+        .background(isAvailable ? Color.piumsSuccess : Color.piumsError)
+        .clipShape(Capsule())
+    }
+}
+
+// MARK: - Artist Avatar with Initials (inspirado en cliente)
+struct PiumsAvatarView: View {
+    let name: String
+    let imageURL: String?
+    let size: CGFloat
+    let gradientColors: [Color]
+    
+    private var initials: String {
+        name.split(separator: " ")
+            .prefix(2)
+            .compactMap { $0.first.map { String($0) } }
+            .joined()
+            .uppercased()
+    }
+    
+    init(name: String, imageURL: String? = nil, size: CGFloat = 60, gradientColors: [Color] = [.piumsPrimary, .piumsSecondary]) {
+        self.name = name
+        self.imageURL = imageURL
+        self.size = size
+        self.gradientColors = gradientColors
+    }
+    
+    var body: some View {
+        ZStack {
+            // Gradient background
+            LinearGradient(
+                colors: gradientColors,
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .frame(width: size, height: size)
+            .clipShape(Circle())
+            
+            // Profile image or initials
+            if let imageURL = imageURL, let url = URL(string: imageURL) {
+                AsyncImage(url: url) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: size, height: size)
+                        .clipShape(Circle())
+                } placeholder: {
+                    Text(initials)
+                        .font(.system(size: size * 0.4, weight: .bold))
+                        .foregroundColor(.white)
+                }
+            } else {
+                Text(initials)
+                    .font(.system(size: size * 0.4, weight: .bold))
+                    .foregroundColor(.white)
+            }
+        }
+    }
+}
+
+// MARK: - Success/Error Banners (del cliente)
+struct PiumsSuccessBanner: View {
+    let message: String
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.title3)
+                .foregroundColor(.piumsSuccess)
+            
+            Text(message)
+                .font(.subheadline.weight(.medium))
+                .foregroundColor(.piumsSuccess)
+            
+            Spacer()
+        }
+        .padding(16)
+        .background(Color.piumsSuccess.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.piumsSuccess.opacity(0.3), lineWidth: 1)
+        )
+    }
+}
+
+struct PiumsErrorBanner: View {
+    let message: String
+    let onDismiss: (() -> Void)?
+    
+    init(message: String, onDismiss: (() -> Void)? = nil) {
+        self.message = message
+        self.onDismiss = onDismiss
+    }
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.title3)
+                .foregroundColor(.piumsError)
+            
+            Text(message)
+                .font(.subheadline.weight(.medium))
+                .foregroundColor(.piumsError)
+            
+            Spacer()
+            
+            if let onDismiss = onDismiss {
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.caption.weight(.bold))
+                        .foregroundColor(.piumsError)
+                }
+            }
+        }
+        .padding(16)
+        .background(Color.piumsError.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.piumsError.opacity(0.3), lineWidth: 1)
+        )
+    }
+}
+
 // MARK: - Preview
 #Preview("Modern Piums Components") {
     NavigationView {
@@ -736,13 +898,38 @@ struct PiumsNavigationBar: View {
                 )
                 
                 VStack(spacing: 20) {
+                    // Avatars and Badges (inspirado en cliente)
+                    PiumsCard(style: .bordered) {
+                        VStack(spacing: 16) {
+                            Text("Avatares y Badges (Cliente Style)")
+                                .font(.headline.weight(.semibold))
+                            
+                            HStack(spacing: 16) {
+                                PiumsAvatarView(name: "María García", size: 60, gradientColors: [.piumsOrange, .piumsAccent])
+                                PiumsAvatarView(name: "Carlos Ruiz", size: 60, gradientColors: [.piumsPrimary, .piumsSecondary])
+                                PiumsAvatarView(name: "Ana López", size: 60, gradientColors: [.piumsSuccess, .piumsInfo])
+                            }
+                            
+                            HStack(spacing: 12) {
+                                PiumsAvailabilityBadge(isAvailable: true)
+                                PiumsAvailabilityBadge(isAvailable: false)
+                            }
+                        }
+                    }
+                    
+                    // Banners (del cliente)
+                    VStack(spacing: 12) {
+                        PiumsSuccessBanner(message: "¡Reserva confirmada exitosamente!")
+                        PiumsErrorBanner(message: "Error al conectar con el servidor") {}
+                    }
+                    
                     // Stats Cards
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 16) {
                         PiumsStatsCard(
                             title: "Reservas Hoy",
                             value: "12",
                             subtitle: "3 pendientes",
-                            icon: "calendar",
+                            icon: "calendar.day.timeline.leading",
                             trend: .up,
                             trendValue: "+15%",
                             color: .piumsPrimary
@@ -752,7 +939,7 @@ struct PiumsNavigationBar: View {
                             title: "Ingresos",
                             value: "€2,340",
                             subtitle: "Este mes",
-                            icon: "eurosign.circle",
+                            icon: "dollarsign.circle.fill",
                             trend: .up,
                             trendValue: "+8%",
                             color: .piumsSuccess

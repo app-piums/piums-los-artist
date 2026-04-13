@@ -37,6 +37,9 @@ struct DashboardView: View {
                         // Quick Actions
                         quickActionsSection
                         
+                        // Promo Banner (inspirado en cliente)
+                        promoBannerSection
+                        
                         // Recent Activity
                         recentActivitySection
                     }
@@ -114,21 +117,11 @@ struct DashboardView: View {
                 .buttonStyle(PiumsButtonStyle())
                 
                 Button(action: {}) {
-                    AsyncImage(url: URL(string: "https://i.pravatar.cc/150?img=1")) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Image(systemName: "person.fill")
-                            .foregroundColor(.piumsPrimary)
-                            .font(.title3)
-                    }
-                    .frame(width: 44, height: 44)
-                    .background(Color.piumsPrimary.opacity(0.1))
-                    .clipShape(Circle())
-                    .overlay(
-                        Circle()
-                            .stroke(Color.piumsPrimary.opacity(0.2), lineWidth: 2)
+                    PiumsAvatarView(
+                        name: "María García", // Esto vendría del viewModel.artistName
+                        imageURL: nil, // URL del avatar si existe
+                        size: 44,
+                        gradientColors: [.piumsOrange, .piumsAccent]
                     )
                 }
                 .buttonStyle(PiumsButtonStyle())
@@ -140,60 +133,90 @@ struct DashboardView: View {
     // MARK: - Welcome Section
     private var welcomeSection: some View {
         PiumsCard(style: .highlighted) {
-            HStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("¡Buenos días!")
-                        .font(.title3.weight(.semibold))
-                        .foregroundColor(.piumsTextPrimary)
-                    
-                    Text("Tienes \(viewModel.todayBookingsCount) reservas programadas para hoy")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundColor(.piumsTextSecondary)
-                        .multilineTextAlignment(.leading)
-                    
-                    // Backend status indicator (DEBUG only)
-                    #if DEBUG
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(Color.piumsSuccess)
-                            .frame(width: 8, height: 8)
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("¡Hola, Artista! 👋")
+                            .font(.system(size: 26, weight: .bold))
+                            .foregroundColor(.piumsTextPrimary)
                         
-                        Text("Backend conectado")
-                            .font(.caption2.weight(.medium))
-                            .foregroundColor(.piumsSuccess)
+                        Text("Tienes \(viewModel.todayBookingsCount) reservas programadas para hoy")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundColor(.piumsTextSecondary)
+                            .multilineTextAlignment(.leading)
                         
-                        Button("Test") {
-                            showingBackendTest = true
-                        }
-                        .font(.caption2.weight(.bold))
-                        .foregroundColor(.piumsSecondary)
-                    }
-                    #endif
-                    
-                    if !viewModel.isLoading && viewModel.todayBookingsCount > 0 {
-                        HStack(spacing: 8) {
-                            Image(systemName: "clock.fill")
-                                .font(.caption)
-                                .foregroundColor(.piumsInfo)
+                        // Availability status
+                        HStack(spacing: 12) {
+                            PiumsAvailabilityBadge(isAvailable: true, size: .small)
                             
-                            if let nextBooking = viewModel.todayBookings.first {
-                                Text("Próxima: \(nextBooking.scheduledDate, formatter: timeFormatter)")
-                                    .font(.caption.weight(.medium))
-                                    .foregroundColor(.piumsInfo)
+                            Text("•")
+                                .foregroundColor(.piumsTextTertiary)
+                            
+                            HStack(spacing: 4) {
+                                Image(systemName: "star.fill")
+                                    .font(.caption)
+                                    .foregroundColor(.piumsWarning)
+                                Text("4.9")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundColor(.piumsTextSecondary)
+                                Text("(124 reseñas)")
+                                    .font(.caption2)
+                                    .foregroundColor(.piumsTextTertiary)
                             }
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Color.piumsInfo.opacity(0.1))
-                        .cornerRadius(8)
+                        
+                        // Backend status indicator (DEBUG only)
+                        #if DEBUG
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(Color.piumsSuccess)
+                                .frame(width: 8, height: 8)
+                            
+                            Text("Backend conectado")
+                                .font(.caption2.weight(.medium))
+                                .foregroundColor(.piumsSuccess)
+                            
+                            Button("Test") {
+                                showingBackendTest = true
+                            }
+                            .font(.caption2.weight(.bold))
+                            .foregroundColor(.piumsSecondary)
+                        }
+                        #endif
+                        
+                        if !viewModel.isLoading && viewModel.todayBookingsCount > 0 {
+                            HStack(spacing: 8) {
+                                Image(systemName: "clock.fill")
+                                    .font(.caption)
+                                    .foregroundColor(.piumsInfo)
+                                
+                                if let nextBooking = viewModel.todayBookings.first {
+                                    Text("Próxima: \(nextBooking.scheduledDate, formatter: timeFormatter)")
+                                        .font(.caption.weight(.medium))
+                                        .foregroundColor(.piumsInfo)
+                                }
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.piumsInfo.opacity(0.1))
+                            .cornerRadius(8)
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    VStack(spacing: 8) {
+                        Image(systemName: "calendar.badge.plus")
+                            .font(.system(size: 32, weight: .light))
+                            .foregroundColor(.piumsPrimary.opacity(0.7))
+                        
+                        if viewModel.todayBookingsCount > 0 {
+                            Text("\(viewModel.todayBookingsCount)")
+                                .font(.title2.weight(.bold))
+                                .foregroundColor(.piumsPrimary)
+                        }
                     }
                 }
-                
-                Spacer()
-                
-                Image(systemName: "calendar.badge.plus")
-                    .font(.system(size: 32, weight: .light))
-                    .foregroundColor(.piumsPrimary)
             }
         }
     }
@@ -344,6 +367,57 @@ struct DashboardView: View {
                     color: .piumsSuccess
                 ) {
                     // Navigate to profile
+                }
+            }
+        }
+    }
+    
+    // MARK: - Promo Banner Section
+    private var promoBannerSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            PiumsCard(style: .elevated, padding: 0) {
+                ZStack {
+                    LinearGradient(
+                        colors: [.piumsOrange, .piumsAccent],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    
+                    HStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("¡Aumenta tus ventas!")
+                                .font(.headline.weight(.bold))
+                                .foregroundColor(.white)
+                            
+                            Text("Activa tu perfil premium y aparece en los primeros resultados")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundColor(.white.opacity(0.9))
+                                .multilineTextAlignment(.leading)
+                            
+                            Button(action: {}) {
+                                Text("Activar Premium")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundColor(.piumsOrange)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                    .background(Color.white)
+                                    .clipShape(Capsule())
+                            }
+                        }
+                        
+                        Spacer()
+                        
+                        VStack(spacing: 4) {
+                            Image(systemName: "crown.fill")
+                                .font(.system(size: 32))
+                                .foregroundColor(.white.opacity(0.7))
+                            
+                            Text("PREMIUM")
+                                .font(.caption2.weight(.bold))
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+                    }
+                    .padding(20)
                 }
             }
         }
