@@ -173,23 +173,63 @@ final class AuthService: ObservableObject {
     }
     
     func validateToken() async {
-        guard apiService.authToken != nil else {
-            return
+        guard let token = apiService.authToken else { return }
+        
+        // Decodificar el JWT localmente sin llamar al backend
+        // (el users-service usa un JWT_SECRET diferente al auth-service, por lo
+        // que /users/me devuelve 401 con tokens válidos del auth-service)
+        if let user = decodeJWTUser(token: token) {
+            if currentArtist == nil {
+                currentArtist = user
+            }
+        } else {
+            // Token malformado o expirado → limpiar sesión
+            apiService.authToken = nil
+            currentArtist = nil
+        }
+    }
+    
+    /// Decodifica el payload del JWT sin verificar firma (solo para leer datos del usuario)
+    private func decodeJWTUser(token: String) -> Artist? {
+        let parts = token.split(separator: ".")
+        guard parts.count == 3 else { return nil }
+        
+        var base64 = String(parts[1])
+        // Padding base64
+        let remainder = base64.count % 4
+        if remainder > 0 { base64 += String(repeating: "=", count: 4 - remainder) }
+        base64 = base64.replacingOccurrences(of: "-", with: "+")
+                       .replacingOccurrences(of: "_", with: "/")
+        
+        guard let data = Data(base64Encoded: base64),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
         }
         
-        do {
-            // Try to fetch current user profile to validate token
-            let response = try await apiService.get(
-                endpoint: .userProfile,
-                responseType: UserDTO.self
-            )
-            
-            currentArtist = response.toDomainModel()
-            
-        } catch {
-            // Token is invalid, try to refresh
-            await refreshToken()
+        // Verificar expiración
+        if let exp = json["exp"] as? TimeInterval {
+            if Date().timeIntervalSince1970 > exp { return nil }
         }
+        
+        let id    = json["id"] as? String ?? ""
+        let email = json["email"] as? String ?? ""
+        let role  = json["role"] as? String ?? ""
+        
+        guard !id.isEmpty, !email.isEmpty else { return nil }
+        guard role == "artista" || role == "artist" || role == "ARTIST" else { return nil }
+        
+        return Artist(
+            name: currentArtist?.name ?? email,
+            email: email,
+            phone: currentArtist?.phone ?? "",
+            profession: "Artist",
+            specialty: "General",
+            bio: currentArtist?.bio ?? "",
+            rating: currentArtist?.rating ?? 0.0,
+            totalReviews: currentArtist?.totalReviews ?? 0,
+            yearsOfExperience: currentArtist?.yearsOfExperience ?? 0,
+            isVerified: currentArtist?.isVerified ?? false
+        )
     }
     
     // MARK: - Token Refresh Scheduling
