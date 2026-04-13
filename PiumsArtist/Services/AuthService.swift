@@ -252,65 +252,208 @@ struct AuthenticatedView<Content: View>: View {
     }
 }
 
-// MARK: - Login View (Basic Implementation)
+// MARK: - Login View (Artist Design)
 
 struct LoginView: View {
     @StateObject private var authService = AuthService.shared
     @State private var email = ""
     @State private var password = ""
     @State private var rememberMe = false
-    @State private var showingAlert = false
+    @State private var showPassword = false
+    @State private var animateIn = false
     
     var body: some View {
-        NavigationView {
-            VStack(spacing: 24) {
-                // Logo or App Title
-                VStack(spacing: 8) {
-                    Image(systemName: "scissors.badge.ellipsis")
-                        .font(.system(size: 60))
-                        .foregroundColor(.blue)
+        ZStack {
+            // Dark artistic background
+            artistBackground
+            
+            // Bottom sheet white card
+            VStack(spacing: 0) {
+                Spacer()
+                loginSheet
+            }
+            .ignoresSafeArea(edges: .bottom)
+        }
+        .ignoresSafeArea()
+        .onAppear {
+            email = authService.artistEmail
+            withAnimation(.easeOut(duration: 0.7).delay(0.1)) {
+                animateIn = true
+            }
+        }
+        .alert("Error de Login", isPresented: .constant(authService.errorMessage != nil)) {
+            Button("OK") { authService.errorMessage = nil }
+        } message: {
+            Text(authService.errorMessage ?? "")
+        }
+    }
+    
+    // MARK: - Dark Artistic Background
+    private var artistBackground: some View {
+        ZStack {
+            // Deep dark gradient
+            LinearGradient(
+                colors: [
+                    Color(red: 0.08, green: 0.08, blue: 0.12),
+                    Color(red: 0.12, green: 0.10, blue: 0.08)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            
+            // Decorative circles
+            Circle()
+                .fill(Color.piumsOrange.opacity(0.15))
+                .frame(width: 280, height: 280)
+                .blur(radius: 60)
+                .offset(x: -80, y: -60)
+            
+            Circle()
+                .fill(Color.piumsAccent.opacity(0.10))
+                .frame(width: 200, height: 200)
+                .blur(radius: 50)
+                .offset(x: 100, y: 20)
+            
+            // Top content
+            VStack(spacing: 0) {
+                VStack(spacing: 20) {
+                    // Logo
+                    Text("Piuma")
+                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.piumsOrange, .piumsAccent],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .opacity(animateIn ? 1 : 0)
+                        .offset(y: animateIn ? 0 : -20)
                     
-                    Text("Piums Artista")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
+                    // Artist icon / illustration
+                    ZStack {
+                        Circle()
+                            .fill(Color.white.opacity(0.05))
+                            .frame(width: 110, height: 110)
+                        
+                        Circle()
+                            .fill(Color.piumsOrange.opacity(0.15))
+                            .frame(width: 84, height: 84)
+                        
+                        Image(systemName: "music.microphone")
+                            .font(.system(size: 38, weight: .light))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [.piumsOrange, .piumsAccent],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                    }
+                    .scaleEffect(animateIn ? 1 : 0.6)
+                    .opacity(animateIn ? 1 : 0)
                     
-                    Text("Inicia sesión para continuar")
+                    VStack(spacing: 6) {
+                        Text("Panel de Artista")
+                            .font(.title2.weight(.bold))
+                            .foregroundColor(.white)
+                        
+                        Text("Gestiona tu carrera creativa")
+                            .font(.subheadline.weight(.regular))
+                            .foregroundColor(.white.opacity(0.55))
+                    }
+                    .opacity(animateIn ? 1 : 0)
+                    .offset(y: animateIn ? 0 : 10)
+                }
+                .padding(.top, 72)
+                
+                Spacer()
+            }
+        }
+    }
+    
+    // MARK: - White Login Sheet
+    private var loginSheet: some View {
+        VStack(spacing: 0) {
+            // Drag indicator
+            RoundedRectangle(cornerRadius: 3)
+                .fill(Color.black.opacity(0.15))
+                .frame(width: 40, height: 4)
+                .padding(.top, 12)
+                .padding(.bottom, 28)
+            
+            VStack(alignment: .leading, spacing: 24) {
+                // Sheet header
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Bienvenido de nuevo")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundColor(.primary)
+                    
+                    Text("Accede a tu panel de control creativo.")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
                 
+                // Fields
                 VStack(spacing: 16) {
-                    // Email Field
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Email")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
+                    // Email
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("EMAIL")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.secondary)
+                            .tracking(0.5)
                         
-                        TextField("tu@email.com", text: $email)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                        TextField("nombre@ejemplo.com", text: $email)
                             .keyboardType(.emailAddress)
-                            .autocapitalization(.none)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                            .background(Color(.systemGray6))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .font(.body)
                     }
                     
-                    // Password Field
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Contraseña")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
+                    // Password
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("CONTRASEÑA")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.secondary)
+                            .tracking(0.5)
                         
-                        SecureField("Contraseña", text: $password)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                    }
-                    
-                    // Remember Me Toggle
-                    HStack {
-                        Toggle("Recordarme", isOn: $rememberMe)
-                        Spacer()
+                        HStack {
+                            Group {
+                                if showPassword {
+                                    TextField("••••••••", text: $password)
+                                } else {
+                                    SecureField("••••••••", text: $password)
+                                }
+                            }
+                            .padding(.leading, 16)
+                            .font(.body)
+                            
+                            Button(action: { showPassword.toggle() }) {
+                                Image(systemName: showPassword ? "eye.slash.fill" : "eye.fill")
+                                    .foregroundColor(.secondary)
+                                    .padding(.trailing, 16)
+                            }
+                        }
+                        .frame(height: 50)
+                        .background(Color(.systemGray6))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        
+                        // Forgot password
+                        HStack {
+                            Spacer()
+                            Button("¿Olvidaste tu contraseña?") {}
+                                .font(.subheadline.weight(.medium))
+                                .foregroundColor(.piumsOrange)
+                        }
                     }
                 }
                 
                 // Login Button
-                Button(action: {
+                Button {
                     Task {
                         await authService.login(
                             email: email,
@@ -318,39 +461,98 @@ struct LoginView: View {
                             rememberMe: rememberMe
                         )
                     }
-                }) {
-                    HStack {
+                } label: {
+                    HStack(spacing: 8) {
                         if authService.isLoading {
                             ProgressView()
-                                .scaleEffect(0.8)
+                                .tint(.white)
+                                .scaleEffect(0.9)
                         }
-                        Text("Iniciar Sesión")
+                        Text(authService.isLoading ? "Iniciando sesión..." : "Iniciar sesión")
+                            .font(.body.weight(.semibold))
                     }
                     .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.blue)
+                    .frame(height: 52)
+                    .background(
+                        email.isEmpty || password.isEmpty
+                        ? Color.piumsOrange.opacity(0.5)
+                        : Color.piumsOrange
+                    )
                     .foregroundColor(.white)
-                    .roundedCorner(8)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
                 }
                 .disabled(authService.isLoading || email.isEmpty || password.isEmpty)
                 
-                Spacer()
+                // Divider
+                HStack(spacing: 12) {
+                    Rectangle()
+                        .fill(Color(.systemGray4))
+                        .frame(height: 1)
+                    
+                    Text("O CONTINUAR CON")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.secondary)
+                        .fixedSize()
+                    
+                    Rectangle()
+                        .fill(Color(.systemGray4))
+                        .frame(height: 1)
+                }
+                
+                // Social login
+                HStack(spacing: 12) {
+                    // Google
+                    Button {
+                        // Google OAuth
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "g.circle.fill")
+                                .font(.title3)
+                                .foregroundColor(Color(red: 0.26, green: 0.52, blue: 0.96))
+                            Text("Continuar con Google")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundColor(.primary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background(Color(.systemGray6))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    
+                    // Apple
+                    Button {
+                        // Apple Sign In
+                    } label: {
+                        Image(systemName: "apple.logo")
+                            .font(.title3.weight(.medium))
+                            .foregroundColor(.primary)
+                            .frame(width: 50, height: 50)
+                            .background(Color(.systemGray6))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                }
+                
+                // Register link
+                HStack(spacing: 4) {
+                    Text("¿Aún no tienes cuenta?")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    
+                    Button("Regístrate gratis") {}
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.piumsOrange)
+                }
+                .frame(maxWidth: .infinity)
             }
-            .padding()
-            .navigationTitle("")
-            .navigationBarHidden(true)
+            .padding(.horizontal, 28)
+            .padding(.bottom, 40)
         }
-        .onAppear {
-            // Pre-fill email if remembered
-            email = authService.artistEmail
-        }
-        .alert("Error de Login", isPresented: .constant(authService.errorMessage != nil)) {
-            Button("OK") {
-                authService.errorMessage = nil
-            }
-        } message: {
-            Text(authService.errorMessage ?? "")
-        }
+        .background(
+            RoundedRectangle(cornerRadius: 32)
+                .fill(Color(.systemBackground))
+                .ignoresSafeArea(edges: .bottom)
+        )
+        .offset(y: animateIn ? 0 : 400)
     }
 }
 
