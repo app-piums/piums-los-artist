@@ -287,8 +287,28 @@ struct ArtistLoginTestSheet: View {
                         }
                     }
                     .disabled(email.isEmpty || password.isEmpty || isLoading)
+                    
+                    // Botón adicional para verificar solo el estado de la cuenta
+                    Button(action: {
+                        Task {
+                            isLoading = true
+                            await backendTest.checkAccountStatus(email: email)
+                            isLoading = false
+                        }
+                    }) {
+                        HStack {
+                            if isLoading {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                            } else {
+                                Image(systemName: "person.badge.shield.checkmark")
+                            }
+                            Text("Verificar Estado de Cuenta")
+                        }
+                    }
+                    .disabled(email.isEmpty || isLoading)
                 } footer: {
-                    Text("Se enviará una petición POST a /auth/login con las credenciales proporcionadas")
+                    Text("'Probar Login' intenta autenticarse con las credenciales. 'Verificar Estado' solo revisa si la cuenta está bloqueada o activa.")
                 }
                 
                 // Resultados inmediatos en el sheet

@@ -238,25 +238,53 @@ class BackendTest: ObservableObject {
                 case 200:
                     connectionStatus = .connected
                     responseMessage += "\n\n✅ LOGIN EXITOSO"
+                    responseMessage += "\n🎉 Usuario autenticado correctamente"
                 case 401:
                     connectionStatus = .failed
                     responseMessage += "\n\n❌ CREDENCIALES INVÁLIDAS"
-                    responseMessage += "\nVerifica que el email y password sean correctos"
+                    responseMessage += "\n💡 Verifica que el email y password sean correctos"
+                    responseMessage += "\n💡 Asegúrate de que el usuario esté registrado en el sistema"
+                case 403:
+                    connectionStatus = .failed
+                    responseMessage += "\n\n🔒 ACCESO PROHIBIDO"
+                    responseMessage += "\n⚠️ La cuenta está bloqueada temporalmente por seguridad"
+                    
+                    // Intentar extraer el tiempo de espera del mensaje
+                    if let responseText = String(data: data, encoding: .utf8),
+                       let jsonData = responseText.data(using: .utf8),
+                       let jsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+                       let message = jsonObject["message"] as? String {
+                        
+                        if message.contains("minutos") {
+                            responseMessage += "\n⏱️ Esto sucede después de múltiples intentos fallidos"
+                            responseMessage += "\n💡 SOLUCIONES:"
+                            responseMessage += "\n   • Esperar el tiempo indicado en el mensaje"
+                            responseMessage += "\n   • Verificar que las credenciales sean correctas"
+                            responseMessage += "\n   • Contactar administrador si persiste"
+                        } else if message.contains("bloqueada") || message.contains("suspended") {
+                            responseMessage += "\n⚠️ La cuenta puede estar suspendida permanentemente"
+                            responseMessage += "\n💡 Contacta al administrador del sistema"
+                        }
+                    }
                 case 422:
                     connectionStatus = .failed
                     responseMessage += "\n\n❌ ERROR DE VALIDACIÓN"
-                    responseMessage += "\nRevisa el formato del email o los datos enviados"
+                    responseMessage += "\n📋 Revisa el formato del email o los datos enviados"
+                    responseMessage += "\n💡 Asegúrate de que el email tenga formato válido"
                 case 429:
                     connectionStatus = .failed
-                    responseMessage += "\n\n❌ DEMASIADOS INTENTOS"
-                    responseMessage += "\nEspera un momento antes de intentar de nuevo"
+                    responseMessage += "\n\n⏱️ DEMASIADOS INTENTOS"
+                    responseMessage += "\n🚫 Rate limiting activado"
+                    responseMessage += "\n💡 Espera un momento antes de intentar de nuevo"
                 case 500...599:
                     connectionStatus = .failed
-                    responseMessage += "\n\n❌ ERROR DEL SERVIDOR"
-                    responseMessage += "\nEl backend tiene problemas internos"
+                    responseMessage += "\n\n💥 ERROR DEL SERVIDOR"
+                    responseMessage += "\n🔧 El backend tiene problemas internos"
+                    responseMessage += "\n💡 Verifica los logs del servidor"
                 default:
                     connectionStatus = .failed
                     responseMessage += "\n\n❓ ESTADO DESCONOCIDO: \(httpResponse.statusCode)"
+                    responseMessage += "\n📖 Consulta la documentación de la API"
                 }
             }
             
@@ -269,6 +297,108 @@ class BackendTest: ObservableObject {
             } else if error.localizedDescription.contains("timeout") {
                 responseMessage += "\n💡 El servidor tardó demasiado en responder"
             }
+        }
+        
+        lastTestedAt = Date()
+        self.responseTime = Date().timeIntervalSince(startTime)
+    }
+    
+    // Test para verificar estado de cuenta (bloqueos, etc.)
+    @MainActor
+    func checkAccountStatus(email: String) async {
+        connectionStatus = .connecting
+        responseMessage = "🔍 Verificando estado de cuenta...\n"
+        responseMessage += "📧 Email: \(email)\n\n"
+        
+        let startTime = Date()
+        
+        do {
+            // Intentamos un endpoint que nos dé información sobre el estado de la cuenta
+            // Como no tenemos un endpoint específico, usamos el login con un password obviamente incorrecto
+            // para obtener información del estado de la cuenta
+            let testData: [String: Any] = [
+                "email": email,
+                "password": "invalid_password_for_status_check_only"
+            ]
+            
+            let jsonData = try JSONSerialization.data(withJSONObject: testData)
+            
+            var request = URLRequest(url: URL(string: APIConfig.currentURL + "/auth/login")!)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue("PiumsArtist/1.0 StatusCheck", forHTTPHeaderField: "User-Agent")
+            request.httpBody = jsonData
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let responseTime = Date().timeIntervalSince(startTime)
+            
+            if let httpResponse = response as? HTTPURLResponse {
+                responseMessage += "⏱️ Tiempo de respuesta: \(Int(responseTime * 1000))ms\n"
+                responseMessage += "🌐 Status HTTP: \(httpResponse.statusCode)\n\n"
+                
+                if let responseText = String(data: data, encoding: .utf8) {
+                    // Intentar parsear respuesta JSON
+                    if let jsonData = responseText.data(using: .utf8),
+                       let jsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+                       let message = jsonObject["message"] as? String {
+                        
+                        responseMessage += "📝 Mensaje del servidor:\n"
+                        responseMessage += "\"\(message)\"\n\n"
+                        
+                        // Analizar el mensaje para detectar diferentes estados
+                        switch httpResponse.statusCode {
+                        case 401:
+                            if message.contains("Credenciales inválidas") {
+                                connectionStatus = .connected
+                                responseMessage += "✅ CUENTA ACTIVA\n"
+                                responseMessage += "👤 El usuario existe en el sistema\n"
+                                responseMessage += "🔑 No hay bloqueos temporales\n"
+                                responseMessage += "💡 El problema probablemente sea la contraseña incorrecta"
+                            } else {
+                                responseMessage += "❓ Mensaje inesperado de credenciales inválidas"
+                            }
+                            
+                        case 403:
+                            connectionStatus = .failed
+                            responseMessage += "🔒 CUENTA BLOQUEADA\n"
+                            
+                            if message.contains("minutos") {
+                                responseMessage += "⏰ Bloqueo temporal por múltiples intentos fallidos\n"
+                                
+                                // Extraer tiempo si es posible
+                                let numbers = message.components(separatedBy: CharacterSet.decimalDigits.inverted).compactMap { Int($0) }
+                                if let waitTime = numbers.first {
+                                    responseMessage += "⌛ Tiempo de espera: \(waitTime) minutos\n"
+                                    responseMessage += "🕐 Hora estimada de desbloqueo: \(Date().addingTimeInterval(TimeInterval(waitTime * 60)).formatted(date: .omitted, time: .shortened))\n"
+                                }
+                                
+                                responseMessage += "\n💡 RECOMENDACIONES:\n"
+                                responseMessage += "• Esperar el tiempo indicado\n"
+                                responseMessage += "• Verificar la contraseña antes del próximo intento\n"
+                                responseMessage += "• Evitar múltiples intentos seguidos\n"
+                            } else {
+                                responseMessage += "⚠️ Bloqueo permanente o suspensión\n"
+                                responseMessage += "💡 Contactar al administrador del sistema\n"
+                            }
+                            
+                        case 404:
+                            connectionStatus = .failed
+                            responseMessage += "❌ USUARIO NO ENCONTRADO\n"
+                            responseMessage += "📧 El email no está registrado en el sistema\n"
+                            responseMessage += "💡 Verificar que el email sea correcto o registrarse\n"
+                            
+                        default:
+                            responseMessage += "❓ Estado desconocido: HTTP \(httpResponse.statusCode)\n"
+                        }
+                    } else {
+                        responseMessage += "📄 Respuesta sin formato JSON:\n\(responseText)"
+                    }
+                }
+            }
+            
+        } catch {
+            connectionStatus = .failed
+            responseMessage += "\n❌ Error al verificar estado: \(error.localizedDescription)"
         }
         
         lastTestedAt = Date()
