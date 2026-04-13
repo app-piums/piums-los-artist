@@ -15,16 +15,41 @@ struct DashboardView: View {
     @State private var showingBackendTest = false
     @State private var animateStats = false
     
+    // MARK: - Constants
+    private enum Constants {
+        static let bottomPadding: CGFloat = 100
+        static let emptyStateHeight: CGFloat = 200
+        static let cardHeight: CGFloat = 120
+        static let horizontalPadding: CGFloat = 20
+        static let sectionSpacing: CGFloat = 24
+        static let headerSize: CGFloat = 44
+    }
+    
+    // MARK: - Formatters (Static for performance)
+    static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter
+    }()
+    
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, d 'de' MMMM"
+        formatter.locale = Locale(identifier: "es_ES")
+        return formatter
+    }()
+    
     var body: some View {
         NavigationView {
             ScrollView {
                 LazyVStack(spacing: 0) {
                     // Custom Navigation Header
                     headerView
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 24)
+                        .padding(.horizontal, Constants.horizontalPadding)
+                        .padding(.bottom, Constants.sectionSpacing)
                     
-                    VStack(spacing: 24) {
+                    VStack(spacing: Constants.sectionSpacing) {
                         // Welcome Section
                         welcomeSection
                         
@@ -43,8 +68,8 @@ struct DashboardView: View {
                         // Recent Activity
                         recentActivitySection
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 100) // Tab bar padding
+                    .padding(.horizontal, Constants.horizontalPadding)
+                    .padding(.bottom, Constants.bottomPadding) // Tab bar padding
                 }
             }
             .refreshable {
@@ -116,15 +141,19 @@ struct DashboardView: View {
                 }
                 .buttonStyle(PiumsButtonStyle())
                 
-                Button(action: {}) {
+                Button {
+                    // Navigate to profile
+                } label: {
                     PiumsAvatarView(
-                        name: "María García", // Esto vendría del viewModel.artistName
-                        imageURL: nil, // URL del avatar si existe
-                        size: 44,
+                        name: "Artista", // TODO: Implementar viewModel.artistName
+                        imageURL: nil, // TODO: Implementar viewModel.artistAvatarURL
+                        size: Constants.headerSize,
                         gradientColors: [.piumsOrange, .piumsAccent]
                     )
                 }
                 .buttonStyle(PiumsButtonStyle())
+                .accessibilityLabel("Perfil del artista")
+                .accessibilityHint("Toca para ver y editar tu perfil")
             }
         }
         .padding(.top, 8)
@@ -191,7 +220,7 @@ struct DashboardView: View {
                                     .foregroundColor(.piumsInfo)
                                 
                                 if let nextBooking = viewModel.todayBookings.first {
-                                    Text("Próxima: \(nextBooking.scheduledDate, formatter: timeFormatter)")
+                                    Text("Próxima: \(nextBooking.scheduledDate, formatter: Self.timeFormatter)")
                                         .font(.caption.weight(.medium))
                                         .foregroundColor(.piumsInfo)
                                 }
@@ -287,7 +316,7 @@ struct DashboardView: View {
                         .font(.title2.weight(.bold))
                         .foregroundColor(.piumsTextPrimary)
                     
-                    Text("\(Date(), formatter: dateFormatter)")
+                    Text("\(Date(), formatter: Self.dateFormatter)")
                         .font(.subheadline.weight(.medium))
                         .foregroundColor(.piumsTextSecondary)
                 }
@@ -307,7 +336,7 @@ struct DashboardView: View {
             
             if viewModel.isLoading {
                 PiumsLoadingView("Cargando agenda...", style: .card)
-                    .frame(height: 120)
+                    .frame(height: Constants.cardHeight)
             } else if viewModel.todayBookings.isEmpty {
                 PiumsEmptyState(
                     icon: "calendar.badge.plus",
@@ -317,7 +346,7 @@ struct DashboardView: View {
                         // Action to add availability
                     }
                 )
-                .frame(height: 200)
+                .frame(height: Constants.emptyStateHeight)
             } else {
                 LazyVStack(spacing: 12) {
                     ForEach(viewModel.todayBookings.prefix(3), id: \.id) { booking in
@@ -463,21 +492,6 @@ struct DashboardView: View {
             }
         }
     }
-    
-    // MARK: - Formatters
-    private var timeFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .none
-        formatter.timeStyle = .short
-        return formatter
-    }
-    
-    private var dateFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE, d 'de' MMMM"
-        formatter.locale = Locale(identifier: "es_ES")
-        return formatter
-    }
 }
 
 // MARK: - Supporting Views
@@ -489,7 +503,7 @@ struct ModernBookingCard: View {
             HStack(spacing: 16) {
                 // Time indicator
                 VStack(spacing: 4) {
-                    Text(booking.scheduledDate, formatter: timeFormatter)
+                    Text(booking.scheduledDate, formatter: DashboardView.timeFormatter)
                         .font(.headline.weight(.bold))
                         .foregroundColor(.piumsPrimary)
                     
@@ -544,13 +558,6 @@ struct ModernBookingCard: View {
                 }
             }
         }
-    }
-    
-    private var timeFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .none
-        formatter.timeStyle = .short
-        return formatter
     }
 }
 
