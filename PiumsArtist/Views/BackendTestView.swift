@@ -11,6 +11,10 @@ struct BackendTestView: View {
     @StateObject private var backendTest = BackendTest()
     @Environment(\.dismiss) private var dismiss
     
+    @State private var testEmail = ""
+    @State private var testPassword = ""
+    @State private var showingLoginTest = false
+    
     var body: some View {
         NavigationView {
             ScrollView {
@@ -164,7 +168,19 @@ struct BackendTestView: View {
                         await backendTest.testFullAuth()
                     }
                 }
+                
+                PiumsButton(
+                    "🎨 Test Login de Artista",
+                    icon: "person.crop.artframe",
+                    style: .secondary,
+                    isLoading: backendTest.connectionStatus == .connecting
+                ) {
+                    showingLoginTest = true
+                }
             }
+        }
+        .sheet(isPresented: $showingLoginTest) {
+            ArtistLoginTestSheet(backendTest: backendTest)
         }
     }
     
@@ -221,6 +237,83 @@ struct ConfigRow: View {
                 .font(.subheadline.weight(.medium))
                 .foregroundColor(.piumsTextPrimary)
                 .multilineTextAlignment(.trailing)
+        }
+    }
+}
+
+// MARK: - Artist Login Test Sheet
+struct ArtistLoginTestSheet: View {
+    @ObservedObject var backendTest: BackendTest
+    @Environment(\.dismiss) private var dismiss
+    
+    @State private var email = ""
+    @State private var password = ""
+    @State private var isLoading = false
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                Section {
+                    TextField("Email del artista", text: $email)
+                        .textContentType(.emailAddress)
+                        .keyboardType(.emailAddress)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                    
+                    SecureField("Contraseña", text: $password)
+                        .textContentType(.password)
+                } header: {
+                    Text("Credenciales de Test")
+                } footer: {
+                    Text("Introduce las credenciales de un artista válido para probar el login. Los datos no se guardan.")
+                }
+                
+                Section {
+                    Button(action: {
+                        Task {
+                            isLoading = true
+                            await backendTest.testArtistLogin(email: email, password: password)
+                            isLoading = false
+                        }
+                    }) {
+                        HStack {
+                            if isLoading {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                            } else {
+                                Image(systemName: "person.crop.artframe")
+                            }
+                            Text("Probar Login de Artista")
+                        }
+                    }
+                    .disabled(email.isEmpty || password.isEmpty || isLoading)
+                } footer: {
+                    Text("Se enviará una petición POST a /auth/login con las credenciales proporcionadas")
+                }
+                
+                // Resultados inmediatos en el sheet
+                if !backendTest.responseMessage.isEmpty {
+                    Section("Resultado del Test") {
+                        ScrollView {
+                            Text(backendTest.responseMessage)
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundColor(.primary)
+                                .textSelection(.enabled)
+                        }
+                        .frame(maxHeight: 200)
+                    }
+                }
+            }
+            .navigationTitle("Test Login Artista")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancelar") { dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cerrar") { dismiss() }
+                }
+            }
         }
     }
 }

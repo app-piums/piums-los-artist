@@ -175,4 +175,103 @@ class BackendTest: ObservableObject {
         
         lastTestedAt = Date()
     }
+    
+    // Test específico para login de artistas
+    @MainActor
+    func testArtistLogin(email: String, password: String) async {
+        connectionStatus = .connecting
+        responseMessage = "🎨 Probando login de artista...\n"
+        responseMessage += "📧 Email: \(email)\n"
+        responseMessage += "🔑 Password: [HIDDEN]\n\n"
+        
+        let startTime = Date()
+        
+        do {
+            let loginData: [String: Any] = [
+                "email": email,
+                "password": password
+            ]
+            
+            let jsonData = try JSONSerialization.data(withJSONObject: loginData)
+            
+            var request = URLRequest(url: URL(string: APIConfig.currentURL + "/auth/login")!)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue("PiumsArtist/1.0", forHTTPHeaderField: "User-Agent")
+            request.httpBody = jsonData
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let responseTime = Date().timeIntervalSince(startTime)
+            
+            if let httpResponse = response as? HTTPURLResponse {
+                responseMessage += "⏱️ Tiempo de respuesta: \(Int(responseTime * 1000))ms\n"
+                responseMessage += "🌐 Status HTTP: \(httpResponse.statusCode)\n"
+                
+                // Headers importantes
+                if let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type") {
+                    responseMessage += "📄 Content-Type: \(contentType)\n"
+                }
+                
+                if let authHeader = httpResponse.value(forHTTPHeaderField: "Authorization") {
+                    responseMessage += "🔐 Auth Header presente: Sí\n"
+                } else {
+                    responseMessage += "🔐 Auth Header presente: No\n"
+                }
+                
+                // Parsear respuesta
+                if let responseText = String(data: data, encoding: .utf8) {
+                    responseMessage += "\n📝 Response body:\n"
+                    
+                    // Intentar parsear como JSON para mejor formato
+                    if let jsonData = responseText.data(using: .utf8),
+                       let jsonObject = try? JSONSerialization.jsonObject(with: jsonData, options: []),
+                       let prettyData = try? JSONSerialization.data(withJSONObject: jsonObject, options: .prettyPrinted),
+                       let prettyJSON = String(data: prettyData, encoding: .utf8) {
+                        responseMessage += prettyJSON
+                    } else {
+                        responseMessage += responseText
+                    }
+                }
+                
+                // Determinar estado según respuesta
+                switch httpResponse.statusCode {
+                case 200:
+                    connectionStatus = .connected
+                    responseMessage += "\n\n✅ LOGIN EXITOSO"
+                case 401:
+                    connectionStatus = .failed
+                    responseMessage += "\n\n❌ CREDENCIALES INVÁLIDAS"
+                    responseMessage += "\nVerifica que el email y password sean correctos"
+                case 422:
+                    connectionStatus = .failed
+                    responseMessage += "\n\n❌ ERROR DE VALIDACIÓN"
+                    responseMessage += "\nRevisa el formato del email o los datos enviados"
+                case 429:
+                    connectionStatus = .failed
+                    responseMessage += "\n\n❌ DEMASIADOS INTENTOS"
+                    responseMessage += "\nEspera un momento antes de intentar de nuevo"
+                case 500...599:
+                    connectionStatus = .failed
+                    responseMessage += "\n\n❌ ERROR DEL SERVIDOR"
+                    responseMessage += "\nEl backend tiene problemas internos"
+                default:
+                    connectionStatus = .failed
+                    responseMessage += "\n\n❓ ESTADO DESCONOCIDO: \(httpResponse.statusCode)"
+                }
+            }
+            
+        } catch {
+            connectionStatus = .failed
+            responseMessage += "\n❌ Error de conexión: \(error.localizedDescription)"
+            
+            if error.localizedDescription.contains("refused") {
+                responseMessage += "\n💡 El servidor no está disponible en localhost:3000"
+            } else if error.localizedDescription.contains("timeout") {
+                responseMessage += "\n💡 El servidor tardó demasiado en responder"
+            }
+        }
+        
+        lastTestedAt = Date()
+        self.responseTime = Date().timeIntervalSince(startTime)
+    }
 }
