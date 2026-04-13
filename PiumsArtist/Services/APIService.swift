@@ -337,6 +337,7 @@ enum APIError: Error, LocalizedError {
     case forbidden
     case notFound
     case serverError
+    case rateLimited(String)
     case unknown
     
     var errorDescription: String? {
@@ -361,6 +362,8 @@ enum APIError: Error, LocalizedError {
             return "Recurso no encontrado"
         case .serverError:
             return "Error del servidor. Intenta más tarde."
+        case .rateLimited(let message):
+            return "Demasiados intentos: \(message)"
         case .unknown:
             return "Error desconocido"
         }
@@ -453,6 +456,13 @@ final class APIService: ObservableObject {
                     throw APIError.forbidden
                 case 404:
                     throw APIError.notFound
+                case 429:
+                    // Rate limiting - extract message if possible
+                    if let errorMessage = try? decoder.decode([String: String].self, from: data)["message"] {
+                        throw APIError.rateLimited(errorMessage)
+                    } else {
+                        throw APIError.rateLimited("Too many requests")
+                    }
                 case 500...599:
                     throw APIError.serverError
                 default:

@@ -221,15 +221,52 @@ class BackendTest: ObservableObject {
                 // Parsear respuesta
                 if let responseText = String(data: data, encoding: .utf8) {
                     responseMessage += "\n📝 Response body:\n"
+                    responseMessage += "Raw data size: \(data.count) bytes\n"
+                    responseMessage += "Encoding: UTF-8\n\n"
                     
-                    // Intentar parsear como JSON para mejor formato
-                    if let jsonData = responseText.data(using: .utf8),
-                       let jsonObject = try? JSONSerialization.jsonObject(with: jsonData, options: []),
-                       let prettyData = try? JSONSerialization.data(withJSONObject: jsonObject, options: .prettyPrinted),
-                       let prettyJSON = String(data: prettyData, encoding: .utf8) {
-                        responseMessage += prettyJSON
+                    // Verificar si hay contenido
+                    if responseText.isEmpty {
+                        responseMessage += "⚠️ RESPUESTA VACÍA\n"
+                        responseMessage += "El servidor no devolvió contenido\n"
                     } else {
-                        responseMessage += responseText
+                        responseMessage += "Raw response:\n\(responseText)\n\n"
+                        
+                        // Intentar parsear como JSON para mejor formato
+                        do {
+                            if let jsonData = responseText.data(using: .utf8) {
+                                let jsonObject = try JSONSerialization.jsonObject(with: jsonData, options: [])
+                                let prettyData = try JSONSerialization.data(withJSONObject: jsonObject, options: .prettyPrinted)
+                                if let prettyJSON = String(data: prettyData, encoding: .utf8) {
+                                    responseMessage += "📋 JSON Formateado:\n\(prettyJSON)\n"
+                                } else {
+                                    responseMessage += "⚠️ Error al formatear JSON\n"
+                                }
+                            }
+                        } catch {
+                            responseMessage += "❌ JSON INVÁLIDO\n"
+                            responseMessage += "Error de parsing: \(error.localizedDescription)\n"
+                            responseMessage += "Posible causa: Respuesta no es JSON válido\n"
+                            
+                            // Verificar si es HTML o texto plano
+                            if responseText.contains("<html") || responseText.contains("<!DOCTYPE") {
+                                responseMessage += "💡 Parece ser una respuesta HTML (posible error 500)\n"
+                            } else if responseText.contains("text/plain") {
+                                responseMessage += "💡 Parece ser texto plano\n"
+                            }
+                        }
+                    }
+                } else {
+                    responseMessage += "\n❌ NO SE PUDO LEER LA RESPUESTA\n"
+                    responseMessage += "Error de codificación o datos corruptos\n"
+                    responseMessage += "Data size: \(data.count) bytes\n"
+                    
+                    // Intentar otros encodings
+                    if let latin1Text = String(data: data, encoding: .isoLatin1) {
+                        responseMessage += "Contenido (ISO-Latin1): \(latin1Text.prefix(200))\n"
+                    } else if let asciiText = String(data: data, encoding: .ascii) {
+                        responseMessage += "Contenido (ASCII): \(asciiText.prefix(200))\n"
+                    } else {
+                        responseMessage += "Datos binarios no legibles\n"
                     }
                 }
                 
@@ -274,8 +311,32 @@ class BackendTest: ObservableObject {
                 case 429:
                     connectionStatus = .failed
                     responseMessage += "\n\n⏱️ DEMASIADOS INTENTOS"
-                    responseMessage += "\n🚫 Rate limiting activado"
-                    responseMessage += "\n💡 Espera un momento antes de intentar de nuevo"
+                    responseMessage += "\n🚫 Rate limiting activado - el servidor está limitando las peticiones"
+                    responseMessage += "\n⚠️ Esto es diferente al bloqueo de cuenta individual"
+                    
+                    // Intentar extraer el tiempo de espera del mensaje
+                    if let responseText = String(data: data, encoding: .utf8),
+                       let jsonData = responseText.data(using: .utf8),
+                       let jsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+                       let message = jsonObject["message"] as? String {
+                        
+                        responseMessage += "\n📝 Mensaje del servidor: \"\(message)\"\n"
+                        
+                        if message.contains("minutos") {
+                            // Extraer tiempo si es posible
+                            let numbers = message.components(separatedBy: CharacterSet.decimalDigits.inverted).compactMap { Int($0) }
+                            if let waitTime = numbers.first {
+                                responseMessage += "⏰ Tiempo de espera: \(waitTime) minutos\n"
+                                responseMessage += "🕐 Hora estimada de liberación: \(Date().addingTimeInterval(TimeInterval(waitTime * 60)).formatted(date: .omitted, time: .shortened))\n"
+                            }
+                        }
+                        
+                        responseMessage += "\n💡 DIFERENCIA CON BLOQUEO DE CUENTA:\n"
+                        responseMessage += "• HTTP 429: Rate limiting del servidor (afecta a todas las IPs)\n"
+                        responseMessage += "• HTTP 403: Bloqueo de cuenta específica\n"
+                        responseMessage += "• Espera el tiempo indicado antes de cualquier intento\n"
+                        responseMessage += "• Evita usar múltiples herramientas de test seguidas\n"
+                    }
                 case 500...599:
                     connectionStatus = .failed
                     responseMessage += "\n\n💥 ERROR DEL SERVIDOR"
