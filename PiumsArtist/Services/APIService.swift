@@ -155,9 +155,9 @@ enum APIEndpoint {
         case .updateNotificationSettings:
             return "/users/me/notifications-settings"
             
-        // Artists
+        // Artists — el backend usa /search/artists para listar y por ID
         case .artists(let page, let limit, let category, let location):
-            var path = "/artists"
+            var path = "/search/artists"
             var params: [String] = []
             if let page = page { params.append("page=\(page)") }
             if let limit = limit { params.append("limit=\(limit)") }
@@ -166,26 +166,29 @@ enum APIEndpoint {
             if !params.isEmpty { path += "?" + params.joined(separator: "&") }
             return path
         case .createArtist:
-            return "/artists"
+            return "/search/artists"
         case .artistById(let id):
-            return "/artists/\(id)"
+            return "/search/artists/\(id)"
         case .updateArtist(let id):
-            return "/artists/\(id)"
+            return "/search/artists/\(id)"
         case .deleteArtist(let id):
-            return "/artists/\(id)"
+            return "/search/artists/\(id)"
         case .artistDashboard:
-            return "/artists/me/dashboard"
+            // No existe endpoint de dashboard — se construye desde /bookings + /catalog/services
+            return "/bookings"
         case .artistBookings(let status, let page):
-            var path = "/artists/me/bookings"
+            // El backend usa /bookings (devuelve las del artista autenticado)
+            // El filtro es "statuses=STATUS" en mayúsculas
+            var path = "/bookings"
             var params: [String] = []
-            if let status = status { params.append("status=\(status)") }
+            if let status = status { params.append("statuses=\(status.uppercased())") }
             if let page = page { params.append("page=\(page)") }
             if !params.isEmpty { path += "?" + params.joined(separator: "&") }
             return path
         case .acceptBooking(let id):
-            return "/artists/bookings/\(id)/accept"
+            return "/bookings/\(id)/confirm"
         case .declineBooking(let id):
-            return "/artists/bookings/\(id)/decline"
+            return "/bookings/\(id)/cancel"
             
         // Catalog
         case .catalogServices(let artistId, let category):

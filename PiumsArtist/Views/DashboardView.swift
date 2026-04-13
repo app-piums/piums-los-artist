@@ -170,15 +170,14 @@ struct DashboardView: View {
                 .foregroundColor(.piumsTextSecondary)
                 .tracking(0.6)
 
-            Text(viewModel.formattedEarnings)
+            Text(viewModel.totalEarnings > 0 ? viewModel.formattedEarnings : "$0")
                 .font(.system(size: 38, weight: .bold))
                 .foregroundColor(.piumsOrange)
 
-            // trend badge
             HStack(spacing: 4) {
                 Image(systemName: "arrow.up.right")
                     .font(.caption2.weight(.bold))
-                Text("+12% este mes")
+                Text("Este mes: \(viewModel.formattedMonthlyEarnings)")
                     .font(.caption.weight(.medium))
             }
             .foregroundColor(.piumsSuccess)
@@ -197,22 +196,21 @@ struct DashboardView: View {
         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: animateStats)
     }
 
-    // MARK: - Secondary Metrics (Pendientes + Visitas)
+    // MARK: - Secondary Metrics (Pendientes + Confirmadas)
     private var secondaryMetricsRow: some View {
         HStack(spacing: 12) {
             metricCard(
                 label: "PENDIENTES",
-                value: "$\(Int(viewModel.monthlyEarnings * 0.1))",
+                value: "\(viewModel.pendingCount)",
                 icon: "clock.fill",
                 iconColor: .piumsWarning,
                 delay: 0.2
             )
-
             metricCard(
-                label: "VISITAS",
-                value: "842",
-                icon: "eye.fill",
-                iconColor: .piumsInfo,
+                label: "CONFIRMADAS",
+                value: "\(viewModel.confirmedCount)",
+                icon: "checkmark.circle.fill",
+                iconColor: .piumsSuccess,
                 delay: 0.3
             )
         }

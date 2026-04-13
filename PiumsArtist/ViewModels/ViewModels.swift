@@ -17,6 +17,10 @@ final class DashboardViewModel: ObservableObject {
     @Published var pendingBookings: [Booking] = []
     @Published var completedBookings: [Booking] = []
     @Published var monthlyEarnings: Double = 0.0
+    @Published var totalEarnings: Double = 0.0
+    @Published var totalBookings: Int = 0
+    @Published var pendingCount: Int = 0
+    @Published var confirmedCount: Int = 0
     @Published var isLoading = false
     @Published var errorMessage: String?
     
@@ -46,36 +50,40 @@ final class DashboardViewModel: ObservableObject {
         errorMessage = nil
         
         do {
-            // Load artist dashboard data
-            let dashboardResponse = try await apiService.get(
-                endpoint: .artistDashboard,
-                responseType: ArtistDashboardDTO.self
-            )
-            
-            let (_, revenueStats, _) = dashboardResponse.toDashboardStats()
-            self.monthlyEarnings = revenueStats.thisMonth
-            
-            // Load artist bookings to get detailed booking data
-            let bookingsResponse = try await apiService.get(
+            // ── Cargar bookings reales desde /bookings ──
+            let bookingsResp = try await apiService.get(
                 endpoint: .artistBookings(status: nil, page: 1),
-                responseType: PaginatedResponseDTO<BookingDTO>.self
+                responseType: BookingsResponseDTO.self
             )
             
-            let allBookings = bookingsResponse.data.map { $0.toDomainModel() }
+            let allBookings = bookingsResp.bookings.map { $0.toDomainModel() }
             
-            // Filter bookings for today
             let today = Date()
             let calendar = Calendar.current
-            self.todayBookings = allBookings.filter { booking in
-                calendar.isDate(booking.scheduledDate, inSameDayAs: today)
+            self.todayBookings = allBookings.filter {
+                calendar.isDate($0.scheduledDate, inSameDayAs: today)
             }
-            
-            self.pendingBookings = allBookings.filter { $0.status == .pending }
+            self.pendingBookings  = allBookings.filter { $0.status == .pending }
             self.completedBookings = allBookings.filter { $0.status == .completed }
+            
+            // Calcular ingresos del mes desde bookings completados
+            let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: today))!
+            let monthlyCompleted = allBookings.filter {
+                $0.status == .completed && $0.scheduledDate >= startOfMonth
+            }
+            self.monthlyEarnings = monthlyCompleted.reduce(0) { $0 + $1.totalPrice }
+            
+            // Total earnings (todos los completados)
+            self.totalEarnings = allBookings.filter { $0.status == .completed }
+                .reduce(0) { $0 + $1.totalPrice }
+            
+            // Stats globales
+            self.totalBookings   = bookingsResp.pagination.total
+            self.pendingCount    = allBookings.filter { $0.status == .pending }.count
+            self.confirmedCount  = allBookings.filter { $0.status == .confirmed }.count
             
         } catch {
             self.errorMessage = error.localizedDescription
-            // Fallback to mock data if API fails
             loadMockData()
         }
         
@@ -124,7 +132,19 @@ final class DashboardViewModel: ObservableObject {
     }
     
     var formattedEarnings: String {
-        "$\(Int(monthlyEarnings))"
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencySymbol = "$"
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: totalEarnings)) ?? "$\(Int(totalEarnings))"
+    }
+    
+    var formattedMonthlyEarnings: String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencySymbol = "$"
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: monthlyEarnings)) ?? "$\(Int(monthlyEarnings))"
     }
 }
 
@@ -171,17 +191,17 @@ final class BookingsViewModel: ObservableObject {
         errorMessage = nil
         
         do {
+            // Usar el endpoint real /bookings que devuelve {bookings:[], pagination:{}}
             let response = try await apiService.get(
                 endpoint: .artistBookings(status: nil, page: 1),
-                responseType: PaginatedResponseDTO<BookingDTO>.self
+                responseType: BookingsResponseDTO.self
             )
             
-            self.bookings = response.data.map { $0.toDomainModel() }
+            self.bookings = response.bookings.map { $0.toDomainModel() }
             applyFilter()
             
         } catch {
             self.errorMessage = error.localizedDescription
-            // Fallback to mock data if API fails
             loadMockData()
         }
         
@@ -598,45 +618,63 @@ final class ProfileViewModel: ObservableObject {
         errorMessage = nil
         
         do {
-            // Load user profile (basic user info)
-            let userResponse = try await apiService.get(
-                endpoint: .userProfile,
-                responseType: UserDTO.self
+            // Obtener ID del artista autenticado desde el token JWT
+            guard let token = APIService.shared.authToken,
+                  let artistId = extractUserIdFromToken(token) else {
+                loadMockData()
+                isLoading = false
+                return
+            }
+            
+            // Cargar perfil del artista desde /search/artists?
+            // y sus servicios desde /catalog/services?artistId=
+            async let servicesTask = apiService.get(
+                endpoint: .catalogServices(artistId: artistId, category: nil),
+                responseType: ServicesResponseDTO.self
+            )
+            async let bookingsTask = apiService.get(
+                endpoint: .artistBookings(status: nil, page: 1),
+                responseType: BookingsResponseDTO.self
             )
             
-            // Try to get artist profile if exists
-            // For now we'll use user info and mock artist data
-            self.artist = userResponse.toDomainModel()
+            let (servicesResp, bookingsResp) = try await (servicesTask, bookingsTask)
             
-            // Load artist dashboard for statistics
-            let dashboardResponse = try await apiService.get(
-                endpoint: .artistDashboard,
-                responseType: ArtistDashboardDTO.self
-            )
+            self.services = servicesResp.services.map { $0.toDomainModel() }
             
-            let (_, revenueStats, ratingStats) = dashboardResponse.toDashboardStats()
+            // Calcular estadísticas desde bookings reales
+            let completed = bookingsResp.bookings.filter { ($0.status ?? "").uppercased() == "COMPLETED" }
+            let earnings = completed.compactMap { $0.totalAmount ?? $0.price }.reduce(0, +)
+            
+            // Usar datos del AuthService si disponibles
+            let authArtist = AuthService.shared.currentArtist
+            self.artist = authArtist ?? Artist.preview
+            
             self.statistics = ProfileStatistics(
-                totalClients: 0, // Not available in current API
-                completedServices: 0, // Not available in current API  
-                monthlyEarnings: revenueStats.thisMonth,
-                averageRating: ratingStats.average
+                totalClients: bookingsResp.pagination.total,
+                completedServices: completed.count,
+                monthlyEarnings: earnings,
+                averageRating: authArtist?.rating ?? 0
             )
-            
-            // Load services from catalog
-            let servicesResponse = try await apiService.get(
-                endpoint: .catalogServices(artistId: userResponse.id, category: nil),
-                responseType: [ServiceDTO].self
-            )
-            
-            self.services = servicesResponse.map { $0.toDomainModel() }
             
         } catch {
             self.errorMessage = error.localizedDescription
-            // Fallback to mock data if API fails
             loadMockData()
         }
         
         isLoading = false
+    }
+    
+    /// Extrae el user id del payload JWT sin verificar firma
+    private func extractUserIdFromToken(_ token: String) -> String? {
+        let parts = token.split(separator: ".")
+        guard parts.count == 3 else { return nil }
+        var b64 = String(parts[1])
+        let rem = b64.count % 4
+        if rem > 0 { b64 += String(repeating: "=", count: 4 - rem) }
+        b64 = b64.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        guard let data = Data(base64Encoded: b64),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return json["id"] as? String
     }
     
     func updateProfile(_ updatedArtist: Artist) {

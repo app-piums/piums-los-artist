@@ -131,63 +131,89 @@ struct RatingStatsDTO: Codable {
     let count: Int
 }
 
-// MARK: - Service DTOs
+// MARK: - Service DTOs  (estructura real de /catalog/services)
 struct ServiceDTO: Codable {
     let id: String
     let artistId: String
-    let title: String
-    let description: String
-    let category: String // MUSIC, DANCE, MAGIC, JUGGLING, PAINTING, COMEDY, OTHER
-    let duration: Int // minutes
-    let price: Double
-    let currency: String
-    let availability: AvailabilityDTO?
-    let active: Bool
-    let images: [String]
+    let name: String            // backend usa "name" no "title"
+    let slug: String?
+    let description: String?
+    let categoryId: String?
+    let cityId: String?
+    let pricingType: String?    // FIXED, HOURLY, etc.
+    let basePrice: Double?
+    let currency: String?
+    let durationMin: Int?
+    let durationMax: Int?
+    let thumbnail: String?
+    let images: [String]?
+    let status: String?         // ACTIVE, INACTIVE, DRAFT
+    let isAvailable: Bool?
+    let isFeatured: Bool?
+    let bookingCount: Int?
+    let viewCount: Int?
+    let createdAt: String?
+    let updatedAt: String?
+    // Nested
+    let category: ServiceCategoryDTO?
+    
+    // Compat: title → name
+    var title: String { name }
+    var price: Double { basePrice ?? 0 }
+    var active: Bool { status == "ACTIVE" || isAvailable == true }
+    var duration: Int { durationMin ?? 60 }
 }
 
-struct AvailabilityDTO: Codable {
-    let monday: [String]?
-    let tuesday: [String]?
-    let wednesday: [String]?
-    let thursday: [String]?
-    let friday: [String]?
-    let saturday: [String]?
-    let sunday: [String]?
+struct ServiceCategoryDTO: Codable {
+    let id: String?
+    let name: String?
+    let slug: String?
 }
 
-struct CreateServiceRequest: Codable {
-    let title: String
-    let description: String
-    let category: String
-    let duration: Int
-    let price: Double
-}
-
-// MARK: - Booking DTOs
+// MARK: - Booking DTOs  (estructura real de /bookings)
 struct BookingDTO: Codable {
     let id: String
-    let clientId: String
-    let artistId: String
-    let serviceId: String
-    let date: String // YYYY-MM-DD format
-    let time: String // HH:mm format
-    let duration: Int
-    let location: BookingLocationDTO
-    let price: Double
-    let status: String // PENDING, CONFIRMED, CANCELLED, COMPLETED, RESCHEDULED
-    let paymentStatus: String // PENDING, PAID, REFUNDED, FAILED
-    let confirmationCode: String
+    let clientId: String?
+    let artistId: String?
+    let serviceId: String?
+    let scheduledDate: String?  // ISO8601
+    let scheduledTime: String?  // HH:mm
+    let durationMinutes: Int?
+    let status: String?         // PENDING, CONFIRMED, CANCELLED, COMPLETED
+    let totalAmount: Double?
+    let currency: String?
+    let paymentStatus: String?
+    let confirmationCode: String?
     let notes: String?
-    let rescheduledAt: String?
-    let rescheduleReason: String?
-    let rescheduleCount: Int
-    let createdAt: String
+    let createdAt: String?
+    let updatedAt: String?
+    // Nested objects (pueden venir o no)
+    let client: BookingClientDTO?
+    let service: BookingServiceDTO?
+    let location: BookingLocationDTO?
+    // Compat legacies
+    let date: String?
+    let time: String?
+    let price: Double?
+}
+
+struct BookingClientDTO: Codable {
+    let id: String?
+    let nombre: String?
+    let name: String?
+    let email: String?
+    var displayName: String { nombre ?? name ?? email ?? "Cliente" }
+}
+
+struct BookingServiceDTO: Codable {
+    let id: String?
+    let name: String?
+    let basePrice: Double?
 }
 
 struct BookingLocationDTO: Codable {
-    let address: String
-    let city: String
+    let address: String?
+    let city: String?
     let postalCode: String?
     let coordinates: CoordinatesDTO?
 }
@@ -329,11 +355,55 @@ struct PaginatedResponseDTO<T: Codable>: Codable {
     let pagination: PaginationDTO
 }
 
+// Respuestas reales del backend (usan nombres de campo específicos)
+struct BookingsResponseDTO: Codable {
+    let bookings: [BookingDTO]
+    let pagination: PaginationBackendDTO
+}
+
+struct ServicesResponseDTO: Codable {
+    let services: [ServiceDTO]
+    let pagination: PaginationBackendDTO
+}
+
+struct ArtistsSearchResponseDTO: Codable {
+    let artists: [ArtistSearchDTO]
+    let pagination: PaginationBackendDTO
+}
+
+struct ArtistSearchDTO: Codable {
+    let id: String
+    let name: String?
+    let email: String?
+    let bio: String?
+    let specialties: [String]?
+    let city: String?
+    let state: String?
+    let country: String?
+    let averageRating: Double?
+    let totalReviews: Int?
+    let totalBookings: Int?
+    let isVerified: Bool?
+    let isActive: Bool?
+    let mainServicePrice: Double?
+    let mainServiceName: String?
+}
+
 struct PaginationDTO: Codable {
     let page: Int
     let limit: Int
     let total: Int
     let pages: Int
+}
+
+struct PaginationBackendDTO: Codable {
+    let page: Int
+    let limit: Int
+    let total: Int
+    // Backend usa "totalPages" o "pages"
+    let totalPages: Int?
+    let pages: Int?
+    var pageCount: Int { totalPages ?? pages ?? 1 }
 }
 
 struct ErrorResponseDTO: Codable {
@@ -377,47 +447,59 @@ extension UserDTO {
     }
 }
 
-extension ArtistDTO {
+extension ArtistSearchDTO {
     func toDomainModel() -> Artist {
-        return Artist(
-            name: stageName,
-            email: "", // Will be filled from UserDTO
+        Artist(
+            name: name ?? email ?? "Artista",
+            email: email ?? "",
             phone: "",
-            profession: specialties.first ?? "Artist",
-            specialty: specialties.joined(separator: ", "),
-            bio: bio,
-            rating: rating,
-            totalReviews: reviewCount,
-            yearsOfExperience: 0, // Not available in new API
-            isVerified: verified
+            profession: specialties?.first ?? "Artist",
+            specialty: specialties?.joined(separator: ", ") ?? "",
+            bio: bio ?? "",
+            rating: averageRating ?? 0,
+            totalReviews: totalReviews ?? 0,
+            yearsOfExperience: 0,
+            isVerified: isVerified ?? false
         )
     }
 }
 
 extension BookingDTO {
     func toDomainModel() -> Booking {
-        let dateFormatter = ISO8601DateFormatter()
-        let dateString = "\(date)T\(time):00.000Z"
-        let scheduledDate = dateFormatter.date(from: dateString) ?? Date()
-        
+        // Parsear fecha desde scheduledDate (ISO8601) o date+time legacy
+        var scheduledAt: Date = Date()
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let iso2 = ISO8601DateFormatter()
+
+        if let sd = scheduledDate {
+            scheduledAt = iso.date(from: sd) ?? iso2.date(from: sd) ?? Date()
+        } else if let d = date, let t = time {
+            let str = "\(d)T\(t):00.000Z"
+            scheduledAt = iso.date(from: str) ?? Date()
+        }
+
         let bookingStatus: BookingStatus = {
-            switch status.uppercased() {
-            case "PENDING": return .pending
+            switch (status ?? "").uppercased() {
+            case "PENDING":   return .pending
             case "CONFIRMED": return .confirmed
             case "CANCELLED": return .cancelled
             case "COMPLETED": return .completed
-            case "RESCHEDULED": return .pending // Map to pending for now
-            default: return .pending
+            default:          return .pending
             }
         }()
-        
+
+        let clientName = client?.displayName ?? "Cliente"
+        let clientEmail = client?.email ?? ""
+        let amount = totalAmount ?? price ?? 0
+
         return Booking(
-            clientName: "Client", // Not available in new API, would need separate call
-            clientEmail: "",
+            clientName: clientName,
+            clientEmail: clientEmail,
             clientPhone: "",
-            scheduledDate: scheduledDate,
-            duration: duration,
-            totalPrice: price,
+            scheduledDate: scheduledAt,
+            duration: durationMinutes ?? 60,
+            totalPrice: amount,
             notes: notes ?? "",
             status: bookingStatus
         )
@@ -426,12 +508,12 @@ extension BookingDTO {
 
 extension ServiceDTO {
     func toDomainModel() -> Service {
-        return Service(
-            name: title,
-            description: description,
+        Service(
+            name: name,
+            description: description ?? "",
             duration: duration,
             price: price,
-            category: category,
+            category: category?.name ?? categoryId ?? "General",
             isActive: active
         )
     }
