@@ -12,6 +12,7 @@ struct DashboardView: View {
     @StateObject private var viewModel = DashboardViewModel()
     @Environment(\.modelContext) private var modelContext
     @State private var showingNotifications = false
+    @State private var showingBackendTest = false
     @State private var animateStats = false
     
     var body: some View {
@@ -57,6 +58,10 @@ struct DashboardView: View {
         .sheet(isPresented: $showingNotifications) {
             NotificationsSheet()
         }
+        .sheet(isPresented: $showingBackendTest) {
+            BackendTestView()
+                .presentationDetents([.large])
+        }
     }
     
     // MARK: - Header View
@@ -75,6 +80,19 @@ struct DashboardView: View {
             Spacer()
             
             HStack(spacing: 12) {
+                // Backend Test Button (only in DEBUG)
+                #if DEBUG
+                Button(action: { showingBackendTest = true }) {
+                    Image(systemName: "link")
+                        .font(.title3.weight(.medium))
+                        .foregroundColor(.piumsSecondary)
+                        .frame(width: 44, height: 44)
+                        .background(Color.piumsSecondary.opacity(0.1))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(PiumsButtonStyle())
+                #endif
+                
                 Button(action: { showingNotifications = true }) {
                     ZStack {
                         Image(systemName: "bell.fill")
@@ -132,6 +150,25 @@ struct DashboardView: View {
                         .font(.subheadline.weight(.medium))
                         .foregroundColor(.piumsTextSecondary)
                         .multilineTextAlignment(.leading)
+                    
+                    // Backend status indicator (DEBUG only)
+                    #if DEBUG
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(Color.piumsSuccess)
+                            .frame(width: 8, height: 8)
+                        
+                        Text("Backend conectado")
+                            .font(.caption2.weight(.medium))
+                            .foregroundColor(.piumsSuccess)
+                        
+                        Button("Test") {
+                            showingBackendTest = true
+                        }
+                        .font(.caption2.weight(.bold))
+                        .foregroundColor(.piumsSecondary)
+                    }
+                    #endif
                     
                     if !viewModel.isLoading && viewModel.todayBookingsCount > 0 {
                         HStack(spacing: 8) {
