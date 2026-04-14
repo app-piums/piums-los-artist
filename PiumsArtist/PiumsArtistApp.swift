@@ -41,10 +41,13 @@ final class ThemeManager: ObservableObject {
         case "dark":  style = .dark
         default:      style = .unspecified
         }
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap { $0.windows }
-            .forEach { $0.overrideUserInterfaceStyle = style }
+        // Apply to every window in every scene (includes sheet windows)
+        for scene in UIApplication.shared.connectedScenes {
+            guard let ws = scene as? UIWindowScene else { continue }
+            for window in ws.windows {
+                window.overrideUserInterfaceStyle = style
+            }
+        }
     }
 }
 

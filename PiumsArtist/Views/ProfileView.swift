@@ -406,7 +406,6 @@ struct SettingsView: View {
     var body: some View {
         NavigationView {
             List {
-                // ── Avatar + nombre ──
                 Section {
                     HStack(spacing: 16) {
                         ZStack {
@@ -533,6 +532,7 @@ struct SettingsView: View {
                 changePasswordSheet
             }
         }
+        .preferredColorScheme(themeManager.colorScheme)
     }
 
     // MARK: - Edit Profile Sheet
