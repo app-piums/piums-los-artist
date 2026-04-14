@@ -493,12 +493,11 @@ private struct DisciplineCard: View {
                 HStack(alignment: .top) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(isSelected ? Color.piumsOrange : Color.piumsOrange.opacity(0.1))
+                            .fill(isSelected ? Color.piumsOrange : Color.piumsOrange.opacity(0.12))
                             .frame(width: 48, height: 48)
-                        VStack(spacing: 1) {
-                            Text(disc.emoji)
-                                .font(.system(size: 22))
-                        }
+                        Image(systemName: disc.systemImage)
+                            .font(.system(size: 22, weight: .medium))
+                            .foregroundStyle(isSelected ? .white : Color.piumsOrange)
                     }
                     Spacer()
                     if isSelected {
@@ -522,14 +521,6 @@ private struct DisciplineCard: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .padding(.top, 2)
-
-                // SF Symbol badge at bottom
-                HStack(spacing: 4) {
-                    Image(systemName: disc.systemImage)
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(isSelected ? Color.piumsOrange : .secondary)
-                }
-                .padding(.top, 6)
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
