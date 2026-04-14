@@ -384,6 +384,7 @@ struct EditProfileView: View {
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var themeManager: ThemeManager
     @State private var showLogoutConfirm = false
     @State private var showEditProfile = false
     @State private var showChangePassword = false
@@ -475,6 +476,21 @@ struct SettingsView: View {
                     } label: {
                         Label("Cambiar contraseña", systemImage: "lock.rotation")
                     }
+                }
+
+                // ── Apariencia ──
+                Section("Apariencia") {
+                    Picker(selection: $themeManager.storedScheme) {
+                        Label("Sistema", systemImage: "circle.lefthalf.filled")
+                            .tag("system")
+                        Label("Claro", systemImage: "sun.max.fill")
+                            .tag("light")
+                        Label("Oscuro", systemImage: "moon.fill")
+                            .tag("dark")
+                    } label: {
+                        Label("Tema", systemImage: "paintbrush.fill")
+                    }
+                    .pickerStyle(.navigationLink)
                 }
 
                 // ── Ayuda y soporte ──

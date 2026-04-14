@@ -9,11 +9,11 @@ import SwiftUI
 
 // MARK: - Modern Color System
 extension Color {
-    // Primary Brand Colors
-    static let piumsPrimary = Color(hex: "#6366F1") // Modern Indigo
-    static let piumsSecondary = Color(hex: "#8B5CF6") // Purple
-    static let piumsAccent = Color(hex: "#F59E0B") // Amber
-    static let piumsOrange = Color(hex: "#FF6B35") // Brand Orange (from client app)
+    // Primary Brand Colors — alineados con Piums naranja (igual que app cliente)
+    static let piumsPrimary   = Color(hex: "#FF6B35") // Brand Orange  ← mismo que piumsOrange
+    static let piumsSecondary = Color(hex: "#E85D2F") // Orange oscuro (hover/pressed)
+    static let piumsAccent    = Color(hex: "#F59E0B") // Amber accent
+    static let piumsOrange    = Color(hex: "#FF6B35") // Brand Orange (alias)
     
     // UI Colors
     static let piumsBackground = Color(.systemBackground)
