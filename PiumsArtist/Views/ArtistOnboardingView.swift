@@ -24,24 +24,24 @@ enum ArtistOnboardingStep: Int, CaseIterable {
 // MARK: - Data models
 
 struct DisciplineOption: Identifiable {
-    let id: String; let name: String; let subtitle: String; let emoji: String
+    let id: String; let name: String; let subtitle: String; let emoji: String; let systemImage: String
     static let all: [DisciplineOption] = [
-        .init(id:"musician",         name:"Músico",               subtitle:"Cantante, Compositor, Banda",    emoji:"🎵"),
-        .init(id:"dj",               name:"DJ / Productor",       subtitle:"Electrónica, Beat Maker",        emoji:"🎧"),
-        .init(id:"photographer",     name:"Fotógrafo",            subtitle:"Eventos, Retratos, Producto",    emoji:"📷"),
-        .init(id:"filmmaker",        name:"Videógrafo",           subtitle:"Clips, Eventos, Comerciales",    emoji:"🎬"),
-        .init(id:"graphic-designer", name:"Diseñador Gráfico",    subtitle:"Marca, Flyers, Portadas",        emoji:"🎨"),
-        .init(id:"illustrator",      name:"Ilustrador",           subtitle:"Arte digital, Portadas",         emoji:"✏️"),
-        .init(id:"dancer",           name:"Bailarín / Coreógrafo",subtitle:"Urbano, Clásico, Show",          emoji:"💃"),
-        .init(id:"mc",               name:"Animador / MC",        subtitle:"Bodas, Eventos, Conciertos",     emoji:"🎤"),
-        .init(id:"writer",           name:"Escritor / Letrista",  subtitle:"Letras, Guiones, Contenidos",    emoji:"📝"),
-        .init(id:"tattooist",        name:"Tatuador",             subtitle:"Tattoo, Body Art, Piercing",     emoji:"🖋️"),
-        .init(id:"makeup",           name:"Maquillador",          subtitle:"Bodas, Cine, FX, Pasarela",      emoji:"💄"),
-        .init(id:"painter",          name:"Pintor / Artista",     subtitle:"Lienzo, Mural, Acuarela",        emoji:"🖌️"),
-        .init(id:"sculptor",         name:"Escultor",             subtitle:"Cerámica, Madera, Metal",        emoji:"🏺"),
-        .init(id:"magician",         name:"Mago / Ilusionista",   subtitle:"Close-up, Shows, Escenario",     emoji:"🪄"),
-        .init(id:"acrobat",          name:"Acróbata / Circo",     subtitle:"Malabares, Aéreos, Fuego",       emoji:"🎪"),
-        .init(id:"other",            name:"Otro",                 subtitle:"Otro talento creativo",          emoji:"⚡"),
+        .init(id:"musician",         name:"Músico",               subtitle:"Cantante, Compositor, Banda",    emoji:"🎵", systemImage:"music.microphone"),
+        .init(id:"dj",               name:"DJ / Productor",       subtitle:"Electrónica, Beat Maker",        emoji:"🎧", systemImage:"hifispeaker.fill"),
+        .init(id:"photographer",     name:"Fotógrafo",            subtitle:"Eventos, Retratos, Producto",    emoji:"📷", systemImage:"camera.fill"),
+        .init(id:"filmmaker",        name:"Videógrafo",           subtitle:"Clips, Eventos, Comerciales",    emoji:"🎬", systemImage:"video.fill"),
+        .init(id:"graphic-designer", name:"Diseñador Gráfico",    subtitle:"Marca, Flyers, Portadas",        emoji:"🎨", systemImage:"pencil.and.ruler.fill"),
+        .init(id:"illustrator",      name:"Ilustrador",           subtitle:"Arte digital, Portadas",         emoji:"✏️", systemImage:"paintbrush.pointed.fill"),
+        .init(id:"dancer",           name:"Bailarín / Coreógrafo",subtitle:"Urbano, Clásico, Show",          emoji:"💃", systemImage:"figure.dance"),
+        .init(id:"mc",               name:"Animador / MC",        subtitle:"Bodas, Eventos, Conciertos",     emoji:"🎤", systemImage:"person.wave.2.fill"),
+        .init(id:"writer",           name:"Escritor / Letrista",  subtitle:"Letras, Guiones, Contenidos",    emoji:"📝", systemImage:"text.quote"),
+        .init(id:"tattooist",        name:"Tatuador",             subtitle:"Tattoo, Body Art, Piercing",     emoji:"🖋️", systemImage:"paintbrush.fill"),
+        .init(id:"makeup",           name:"Maquillador",          subtitle:"Bodas, Cine, FX, Pasarela",      emoji:"💄", systemImage:"sparkle"),
+        .init(id:"painter",          name:"Pintor / Artista",     subtitle:"Lienzo, Mural, Acuarela",        emoji:"🖌️", systemImage:"paintpalette.fill"),
+        .init(id:"sculptor",         name:"Escultor",             subtitle:"Cerámica, Madera, Metal",        emoji:"🏺", systemImage:"cube.fill"),
+        .init(id:"magician",         name:"Mago / Ilusionista",   subtitle:"Close-up, Shows, Escenario",     emoji:"🪄", systemImage:"sparkles"),
+        .init(id:"acrobat",          name:"Acróbata / Circo",     subtitle:"Malabares, Aéreos, Fuego",       emoji:"🎪", systemImage:"figure.gymnastics"),
+        .init(id:"other",            name:"Otro",                 subtitle:"Otro talento creativo",          emoji:"⚡", systemImage:"star.fill"),
     ]
     // Category mapping → backend enum
     var category: String {
@@ -485,36 +485,65 @@ private struct OnbDisciplineStep: View {
 
 private struct DisciplineCard: View {
     let disc: DisciplineOption; let isSelected: Bool; let onTap: () -> Void
+
     var body: some View {
-        Button(action:onTap) {
-            VStack(alignment:.leading, spacing:0) {
-                HStack(alignment:.top) {
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 0) {
+                // Icon row
+                HStack(alignment: .top) {
                     ZStack {
-                        RoundedRectangle(cornerRadius:10)
-                            .fill(isSelected ? Color.piumsOrange : Color(.secondarySystemBackground))
-                            .frame(width:40, height:40)
-                        Text(disc.emoji).font(.title3)
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(isSelected ? Color.piumsOrange : Color.piumsOrange.opacity(0.1))
+                            .frame(width: 48, height: 48)
+                        VStack(spacing: 1) {
+                            Text(disc.emoji)
+                                .font(.system(size: 22))
+                        }
                     }
                     Spacer()
                     if isSelected {
                         ZStack {
-                            Circle().fill(Color.piumsOrange).frame(width:22,height:22)
-                            Image(systemName:"checkmark").font(.system(size:11,weight:.bold)).foregroundStyle(.white)
-                        }.transition(.scale.combined(with:.opacity))
+                            Circle().fill(Color.piumsOrange).frame(width: 22, height: 22)
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
+                        .transition(.scale.combined(with: .opacity))
                     }
-                }.padding(.bottom,8)
-                Text(disc.name).font(.subheadline.bold()).foregroundStyle(.primary).lineLimit(2)
-                Text(disc.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(2).padding(.top,2)
+                }
+                .padding(.bottom, 10)
+
+                Text(disc.name)
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                Text(disc.subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .padding(.top, 2)
+
+                // SF Symbol badge at bottom
+                HStack(spacing: 4) {
+                    Image(systemName: disc.systemImage)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(isSelected ? Color.piumsOrange : .secondary)
+                }
+                .padding(.top, 6)
             }
-            .padding(14).frame(maxWidth:.infinity, alignment:.leading)
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius:16)
+                RoundedRectangle(cornerRadius: 16)
                     .fill(isSelected ? Color.piumsOrange.opacity(0.08) : Color(.secondarySystemBackground))
-                    .overlay(RoundedRectangle(cornerRadius:16).stroke(isSelected ? Color.piumsOrange : Color.clear, lineWidth:2))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(isSelected ? Color.piumsOrange : Color.clear, lineWidth: 2)
+                    )
             )
         }
         .buttonStyle(.plain)
-        .animation(.easeInOut(duration:0.18), value:isSelected)
+        .animation(.easeInOut(duration: 0.18), value: isSelected)
     }
 }
 
