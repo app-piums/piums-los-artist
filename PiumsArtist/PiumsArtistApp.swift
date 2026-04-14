@@ -15,7 +15,11 @@ final class ThemeManager: ObservableObject {
     static let shared = ThemeManager()
 
     @Published var storedScheme: String {
-        didSet { UserDefaults.standard.set(storedScheme, forKey: "piums_color_scheme") }
+        didSet {
+            UserDefaults.standard.set(storedScheme, forKey: "piums_color_scheme")
+            // Apply immediately to all UIKit windows
+            DispatchQueue.main.async { self.applyToWindows() }
+        }
     }
 
     private init() {

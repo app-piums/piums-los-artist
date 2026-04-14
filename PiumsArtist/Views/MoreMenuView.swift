@@ -62,7 +62,11 @@ struct MoreMenuView: View {
             .sheet(isPresented: $showProfile) { ProfileView() }
             .sheet(isPresented: $showServices) { NavigationView { ServicesView() }.presentationDetents([.large]) }
             .sheet(isPresented: $showAbsences) { NavigationView { AbsencesView() }.presentationDetents([.large]) }
-            .sheet(isPresented: $showSettings) { SettingsView() }
+            .sheet(isPresented: $showAbsences) { NavigationView { AbsencesView() }.presentationDetents([.large]) }
+            .sheet(isPresented: $showSettings) {
+                SettingsView()
+                    .environmentObject(ThemeManager.shared)
+            }
             .alert("¿Cerrar sesión?", isPresented: $showLogoutAlert) {
                 Button("Cancelar", role: .cancel) {}
                 Button("Cerrar sesión", role: .destructive) {

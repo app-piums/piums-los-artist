@@ -115,6 +115,7 @@ struct ProfileView: View {
             }
             .sheet(isPresented: $showingSettings) {
                 SettingsView()
+                    .environmentObject(ThemeManager.shared)
             }
         }
     }
