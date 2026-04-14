@@ -383,51 +383,305 @@ struct EditProfileView: View {
 }
 
 struct SettingsView: View {
-    @Environment(\.presentationMode) var presentationMode
-    
+    @Environment(\.dismiss) private var dismiss
+    @State private var showLogoutConfirm = false
+    @State private var showEditProfile = false
+    @State private var showChangePassword = false
+
+    // Editable fields
+    @State private var editName = ""
+    @State private var editPhone = ""
+    @State private var editBio = ""
+    @State private var currentPassword = ""
+    @State private var newPassword = ""
+    @State private var confirmPassword = ""
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+    @State private var successMessage: String?
+
+    private var artist: Artist? { AuthService.shared.currentArtist }
+
     var body: some View {
         NavigationView {
-            VStack(spacing: 20) {
-                Text("Configuración de la Aplicación")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                
-                Text("Las opciones de configuración avanzada se implementarán en la siguiente versión")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                
-                VStack(spacing: 16) {
-                    Text("🚧 Próximamente 🚧")
-                        .font(.headline)
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("• Configuración de notificaciones")
-                        Text("• Preferencias de privacidad")
-                        Text("• Configuración de pagos")
-                        Text("• Horarios de trabajo")
-                        Text("• Y mucho más...")
+            List {
+                // ── Avatar + nombre ──
+                Section {
+                    HStack(spacing: 16) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.piumsOrange.opacity(0.15))
+                                .frame(width: 68, height: 68)
+                            Text(initials)
+                                .font(.title2.bold())
+                                .foregroundStyle(Color.piumsOrange)
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(artist?.name ?? "Artista")
+                                .font(.headline)
+                            Text(artist?.email ?? "")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Text("Artista Pro")
+                                .font(.caption)
+                                .padding(.horizontal, 8).padding(.vertical, 3)
+                                .background(Color.piumsOrange.opacity(0.12))
+                                .foregroundStyle(Color.piumsOrange)
+                                .clipShape(Capsule())
+                        }
                     }
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .padding(.vertical, 8)
                 }
-                .padding()
-                .background(Color(.systemGray6))
-                .cornerRadius(12)
-                
-                Spacer()
+
+                // ── Mensajes ──
+                if let msg = successMessage {
+                    Section {
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark.circle.fill").foregroundColor(.piumsSuccess)
+                            Text(msg).font(.caption)
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.piumsSuccess.opacity(0.1))
+                        .cornerRadius(8)
+                    }
+                    .listRowSeparator(.hidden)
+                }
+                if let msg = errorMessage {
+                    Section {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.piumsError)
+                            Text(msg).font(.caption)
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.piumsError.opacity(0.1))
+                        .cornerRadius(8)
+                    }
+                    .listRowSeparator(.hidden)
+                }
+
+                // ── Cuenta ──
+                Section("Cuenta") {
+                    Button {
+                        prepareEdit()
+                        showEditProfile = true
+                    } label: {
+                        Label("Editar perfil", systemImage: "person.circle")
+                    }
+
+                    Button {
+                        clearPassFields()
+                        showChangePassword = true
+                    } label: {
+                        Label("Cambiar contraseña", systemImage: "lock.rotation")
+                    }
+                }
+
+                // ── Ayuda y soporte ──
+                Section("Ayuda y soporte") {
+                    Label("Mis quejas", systemImage: "exclamationmark.bubble")
+                    Label("Términos y condiciones", systemImage: "doc.text")
+                    Label("Política de privacidad", systemImage: "hand.raised")
+                    Label("Contactar soporte", systemImage: "message")
+                }
+                .foregroundStyle(.primary)
+
+                // ── Cerrar sesión ──
+                Section {
+                    Button(role: .destructive) {
+                        showLogoutConfirm = true
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Label("Cerrar sesión", systemImage: "rectangle.portrait.and.arrow.right")
+                                .fontWeight(.semibold)
+                            Spacer()
+                        }
+                    }
+                }
             }
-            .padding()
             .navigationTitle("Configuración")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cerrar") {
-                        presentationMode.wrappedValue.dismiss()
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cerrar") { dismiss() }
+                }
+            }
+            .confirmationDialog("¿Cerrar sesión?", isPresented: $showLogoutConfirm, titleVisibility: .visible) {
+                Button("Cerrar sesión", role: .destructive) {
+                    AuthService.shared.logout()
+                }
+                Button("Cancelar", role: .cancel) {}
+            }
+            .sheet(isPresented: $showEditProfile) {
+                editProfileSheet
+            }
+            .sheet(isPresented: $showChangePassword) {
+                changePasswordSheet
+            }
+        }
+    }
+
+    // MARK: - Edit Profile Sheet
+    private var editProfileSheet: some View {
+        NavigationView {
+            Form {
+                Section("Nombre") {
+                    TextField("Nombre completo", text: $editName)
+                }
+                Section("Teléfono") {
+                    TextField("Teléfono", text: $editPhone)
+                        .keyboardType(.phonePad)
+                }
+                Section("Biografía") {
+                    TextField("Cuéntanos sobre ti", text: $editBio, axis: .vertical)
+                        .lineLimit(3...6)
+                }
+                if let msg = errorMessage {
+                    Section {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.piumsError)
+                            Text(msg).font(.caption)
+                        }
                     }
+                    .listRowSeparator(.hidden)
+                }
+            }
+            .navigationTitle("Editar perfil")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Guardar") {
+                        Task { await saveProfile() }
+                    }
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.piumsOrange)
+                    .disabled(isSaving)
+                }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancelar") { showEditProfile = false }
+                }
+            }
+            .overlay { if isSaving { ProgressView() } }
+        }
+    }
+
+    // MARK: - Change Password Sheet
+    private var changePasswordSheet: some View {
+        NavigationView {
+            Form {
+                Section("Contraseña actual") {
+                    SecureField("Contraseña actual", text: $currentPassword)
+                }
+                Section("Nueva contraseña") {
+                    SecureField("Nueva contraseña", text: $newPassword)
+                    SecureField("Confirmar nueva contraseña", text: $confirmPassword)
+                }
+                if let msg = errorMessage {
+                    Section {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.piumsError)
+                            Text(msg).font(.caption)
+                        }
+                    }
+                    .listRowSeparator(.hidden)
+                }
+            }
+            .navigationTitle("Cambiar contraseña")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Guardar") {
+                        Task { await changePassword() }
+                    }
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.piumsOrange)
+                    .disabled(isSaving)
+                }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancelar") { showChangePassword = false }
                 }
             }
         }
+    }
+
+    // MARK: - Helpers
+
+    private var initials: String {
+        let name = artist?.name ?? "A"
+        return name.components(separatedBy: " ")
+            .compactMap { $0.first.map(String.init) }
+            .prefix(2)
+            .joined()
+            .uppercased()
+    }
+
+    private func prepareEdit() {
+        editName = artist?.name ?? ""
+        editPhone = artist?.phone ?? ""
+        editBio = artist?.bio ?? ""
+        errorMessage = nil
+        successMessage = nil
+    }
+
+    private func clearPassFields() {
+        currentPassword = ""
+        newPassword = ""
+        confirmPassword = ""
+        errorMessage = nil
+        successMessage = nil
+    }
+
+    private func saveProfile() async {
+        isSaving = true
+        errorMessage = nil
+        do {
+            let body = UpdateUserRequest(name: editName, phone: editPhone, bio: editBio, location: nil)
+            let _ = try await APIService.shared.put(
+                endpoint: .updateUserProfile,
+                body: body,
+                responseType: UserDTO.self
+            )
+            // Update local
+            artist?.name = editName
+            artist?.phone = editPhone
+            artist?.bio = editBio
+            successMessage = "Perfil actualizado correctamente"
+            showEditProfile = false
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isSaving = false
+    }
+
+    private func changePassword() async {
+        guard newPassword == confirmPassword else {
+            errorMessage = "Las contraseñas no coinciden"
+            return
+        }
+        guard newPassword.count >= 6 else {
+            errorMessage = "La contraseña debe tener al menos 6 caracteres"
+            return
+        }
+        isSaving = true
+        errorMessage = nil
+        do {
+            struct ChangePassBody: Codable {
+                let currentPassword: String
+                let newPassword: String
+            }
+            let body = ChangePassBody(currentPassword: currentPassword, newPassword: newPassword)
+            let _ = try await APIService.shared.post(
+                endpoint: .changePassword,
+                body: body,
+                responseType: EmptyResponseDTO.self
+            )
+            successMessage = "Contraseña cambiada correctamente"
+            showChangePassword = false
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isSaving = false
     }
 }
 
