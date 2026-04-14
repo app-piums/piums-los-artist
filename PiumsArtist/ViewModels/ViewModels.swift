@@ -50,16 +50,20 @@ final class DashboardViewModel: ObservableObject {
         errorMessage = nil
         
         do {
-            let dashboard = try await apiService.get(
-                endpoint: .artistDashboard,
-                responseType: ArtistDashboardDTO.self
+            // Cargar stats reales del dashboard
+            let statsResp = try await apiService.get(
+                endpoint: .artistStats,
+                responseType: ArtistStatsResponseDTO.self
             )
+            let stats = statsResp.stats
+            
+            // Cargar reservas próximas (CONFIRMED y PENDING)
             let bookingsResp = try await apiService.get(
                 endpoint: .artistBookings(status: nil, page: 1, artistId: nil),
-                responseType: PaginatedResponseDTO<BookingDTO>.self
+                responseType: ArtistBookingsResponseDTO.self
             )
             
-            let allBookings = bookingsResp.data.map { $0.toDomainModel() }
+            let allBookings = bookingsResp.bookings.map { $0.toDomainModel() }
             
             let today = Date()
             let calendar = Calendar.current
@@ -69,12 +73,14 @@ final class DashboardViewModel: ObservableObject {
             self.pendingBookings  = allBookings.filter { $0.status == .pending }
             self.completedBookings = allBookings.filter { $0.status == .completed }
             
-            self.monthlyEarnings = dashboard.revenue.thisMonth
-            self.totalEarnings = dashboard.revenue.total
+            // Usar ingresos del backend
+            self.monthlyEarnings = stats.revenue.thisMonth
+            self.totalEarnings   = stats.revenue.total
             
-            self.totalBookings   = dashboard.bookings.total
-            self.pendingCount    = dashboard.bookings.pending
-            self.confirmedCount  = dashboard.bookings.confirmed
+            // Stats de bookings reales
+            self.totalBookings  = stats.bookings.total
+            self.pendingCount   = stats.bookings.pending
+            self.confirmedCount = stats.bookings.confirmed
             
         } catch {
             self.errorMessage = error.localizedDescription
@@ -165,10 +171,10 @@ final class BookingsViewModel: ObservableObject {
         do {
             let response = try await apiService.get(
                 endpoint: .artistBookings(status: nil, page: 1, artistId: nil),
-                responseType: PaginatedResponseDTO<BookingDTO>.self
+                responseType: ArtistBookingsResponseDTO.self
             )
             
-            self.bookings = response.data.map { $0.toDomainModel() }
+            self.bookings = response.bookings.map { $0.toDomainModel() }
             applyFilter()
             
         } catch {
@@ -206,7 +212,7 @@ final class BookingsViewModel: ObservableObject {
     private func updateBookingStatus(_ booking: Booking, status: String) async {
         do {
             let endpoint: APIEndpoint
-            let body: Encodable?
+            let body: Data?
             
             switch status {
             case "CONFIRMED":
@@ -214,25 +220,21 @@ final class BookingsViewModel: ObservableObject {
                 body = nil
             case "CANCELLED":
                 endpoint = .declineBooking(booking.remoteId)
-                body = RejectBookingRequest(reason: "No disponibilidad en el horario solicitado", artistId: nil)
+                let req = RejectBookingRequest(reason: "No disponibilidad en el horario solicitado", artistId: nil)
+                body = try JSONEncoder().encode(AnyEncodable(req))
+            case "COMPLETED":
+                endpoint = .completeBooking(booking.remoteId)
+                body = nil
             default:
                 return
             }
             
-            if let body = body {
-                let _ = try await apiService.request(
-                    endpoint: endpoint,
-                    method: .POST,
-                    body: try JSONEncoder().encode(AnyEncodable(body)),
-                    responseType: BookingDTO.self
-                )
-            } else {
-                let _ = try await apiService.request(
-                    endpoint: endpoint,
-                    method: .POST,
-                    responseType: BookingDTO.self
-                )
-            }
+            let _ = try await apiService.request(
+                endpoint: endpoint,
+                method: .PATCH,
+                body: body,
+                responseType: EmptyResponseDTO.self
+            )
             
             if let index = bookings.firstIndex(where: { $0.id == booking.id }) {
                 let newStatus: BookingStatus = {
@@ -243,7 +245,6 @@ final class BookingsViewModel: ObservableObject {
                     default: return booking.status
                     }
                 }()
-                
                 bookings[index].status = newStatus
                 applyFilter()
             }
@@ -584,32 +585,51 @@ final class ProfileViewModel: ObservableObject {
         errorMessage = nil
         
         do {
-            let artistId = try await resolveArtistProfileId()
-            
+            // Cargar perfil y stats en paralelo
+            async let profileTask = apiService.get(
+                endpoint: .artistDashboard,
+                responseType: ArtistProfileResponseDTO.self
+            )
+            async let statsTask = apiService.get(
+                endpoint: .artistStats,
+                responseType: ArtistStatsResponseDTO.self
+            )
             async let servicesTask = apiService.get(
-                endpoint: .catalogServices(artistId: artistId, category: nil),
+                endpoint: .catalogServices(artistId: nil, category: nil),
                 responseType: [ServiceDTO].self
             )
-            async let bookingsTask = apiService.get(
-                endpoint: .artistBookings(status: nil, page: 1, artistId: nil),
-                responseType: PaginatedResponseDTO<BookingDTO>.self
+            
+            let (profileResp, statsResp, servicesResp) = try await (profileTask, statsTask, servicesTask)
+            
+            let profile = profileResp.artist
+            let stats = statsResp.stats
+            
+            // Convertir perfil a modelo local
+            let currentArtist = AuthService.shared.currentArtist
+            if let currentArtist = currentArtist {
+                currentArtist.rating = profile.rating ?? 0
+                currentArtist.totalReviews = profile.reviewsCount ?? 0
+                currentArtist.isVerified = profile.isVerified ?? false
+                if let bio = profile.bio { currentArtist.bio = bio }
+            }
+            self.artist = currentArtist ?? Artist(
+                name: profile.displayName,
+                email: "",
+                profession: profile.category ?? "Artista",
+                specialty: profile.specialties?.joined(separator: ", ") ?? "",
+                bio: profile.bio ?? "",
+                rating: profile.rating ?? 0,
+                totalReviews: profile.reviewsCount ?? 0,
+                isVerified: profile.isVerified ?? false
             )
             
-            let (servicesResp, bookingsResp) = try await (servicesTask, bookingsTask)
-            
             self.services = servicesResp.map { $0.toDomainModel() }
-
-            let completed = bookingsResp.data.filter { ($0.status ?? "").uppercased() == "COMPLETED" }
-            let earnings = completed.compactMap { $0.price }.reduce(0, +)
-            
-            let authArtist = AuthService.shared.currentArtist
-            self.artist = authArtist ?? Artist.preview
             
             self.statistics = ProfileStatistics(
-                totalClients: bookingsResp.pagination.total,
-                completedServices: completed.count,
-                monthlyEarnings: earnings,
-                averageRating: authArtist?.rating ?? 0
+                totalClients: stats.bookings.total,
+                completedServices: stats.bookings.completed,
+                monthlyEarnings: stats.revenue.thisMonth,
+                averageRating: stats.rating.average
             )
             
         } catch {
@@ -621,13 +641,7 @@ final class ProfileViewModel: ObservableObject {
     }
 
     private func resolveArtistProfileId() async throws -> String? {
-        let email = AuthService.shared.currentArtist?.email ?? extractEmailFromToken(APIService.shared.authToken)
-        guard let email = email, !email.isEmpty else { return nil }
-        let artistsResp = try await apiService.get(
-            endpoint: .artists(page: 1, limit: 50, category: nil, location: nil),
-            responseType: ArtistsSearchResponseDTO.self
-        )
-        return artistsResp.artists.first { $0.email?.lowercased() == email.lowercased() }?.id
+        return nil
     }
 
     private func extractEmailFromToken(_ token: String?) -> String? {

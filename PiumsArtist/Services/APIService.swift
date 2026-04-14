@@ -54,9 +54,12 @@ enum APIEndpoint {
     case updateArtist(String)
     case deleteArtist(String)
     case artistDashboard
+    case artistStats
     case artistBookings(status: String? = nil, page: Int? = nil, artistId: String? = nil)
     case acceptBooking(String)
     case declineBooking(String)
+    case completeBooking(String)
+    case artistCancelBooking(String)
     
     // Catalog
     case catalogServices(artistId: String? = nil, category: String? = nil)
@@ -174,18 +177,24 @@ enum APIEndpoint {
         case .deleteArtist(let id):
             return "/search/artists/\(id)"
         case .artistDashboard:
-            return "/artists/me/dashboard"
+            return "/artists/dashboard/me"
+        case .artistStats:
+            return "/artists/dashboard/me/stats"
         case .artistBookings(let status, let page, _):
-            var path = "/artists/me/bookings"
+            var path = "/artists/dashboard/me/bookings"
             var params: [String] = []
             if let status = status { params.append("status=\(status.uppercased())") }
             if let page = page { params.append("page=\(page)") }
             if !params.isEmpty { path += "?" + params.joined(separator: "&") }
             return path
         case .acceptBooking(let id):
-            return "/artists/bookings/\(id)/accept"
+            return "/artists/dashboard/me/bookings/\(id)/accept"
         case .declineBooking(let id):
-            return "/artists/bookings/\(id)/decline"
+            return "/artists/dashboard/me/bookings/\(id)/decline"
+        case .completeBooking(let id):
+            return "/artists/dashboard/me/bookings/\(id)/complete"
+        case .artistCancelBooking(let id):
+            return "/artists/dashboard/me/bookings/\(id)/cancel"
             
         // Catalog
         case .catalogServices(let artistId, let category):

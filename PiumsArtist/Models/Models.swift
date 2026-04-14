@@ -130,6 +130,8 @@ final class Booking {
     var status: BookingStatus
     var totalPrice: Double
     var notes: String
+    var serviceName: String?
+    var bookingCode: String?
     var createdAt: Date
     var updatedAt: Date
     
@@ -142,7 +144,9 @@ final class Booking {
         duration: Int,
         totalPrice: Double,
         notes: String = "",
-        status: BookingStatus = .pending
+        status: BookingStatus = .pending,
+        serviceName: String? = nil,
+        bookingCode: String? = nil
     ) {
         self.id = UUID()
         self.remoteId = remoteId
@@ -154,6 +158,8 @@ final class Booking {
         self.status = status
         self.totalPrice = totalPrice
         self.notes = notes
+        self.serviceName = serviceName
+        self.bookingCode = bookingCode
         self.createdAt = Date()
         self.updatedAt = Date()
     }

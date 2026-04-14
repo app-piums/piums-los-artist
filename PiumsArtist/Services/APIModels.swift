@@ -170,25 +170,106 @@ struct ServiceCategoryDTO: Codable {
     let slug: String?
 }
 
-// MARK: - Booking DTOs (estructura OpenAPI)
+// MARK: - Booking DTOs (estructura real del SDK/backend)
 struct BookingDTO: Codable {
     let id: String
+    let code: String?
     let clientId: String?
     let artistId: String?
     let serviceId: String?
-    let date: String?
-    let time: String?
-    let duration: Int?
-    let location: BookingLocationDTO?
-    let price: Double?
+    let scheduledDate: String?   // ISO string — fecha original
+    let startAt: String?         // ISO string — startAt (puede diferir de scheduledDate)
+    let endAt: String?
+    let durationMinutes: Int?
+    let location: String?
+    let locationLat: Double?
+    let locationLng: Double?
     let status: String?
+    let servicePrice: Int?       // centavos
+    let addonsPrice: Int?        // centavos
+    let totalPrice: Int?         // centavos
+    let currency: String?
     let paymentStatus: String?
-    let confirmationCode: String?
-    let notes: String?
-    let rescheduledAt: String?
-    let rescheduleReason: String?
-    let rescheduleCount: Int?
+    let depositRequired: Bool?
+    let depositAmount: Int?
+    let selectedAddons: [String]?
+    let clientNotes: String?
+    let artistNotes: String?
+    let cancellationReason: String?
+    let serviceName: String?     // nombre del servicio reservado
+    let artistName: String?
     let createdAt: String?
+    let updatedAt: String?
+}
+
+// Respuesta de /artists/dashboard/me/bookings
+struct ArtistBookingsResponseDTO: Codable {
+    let bookings: [BookingDTO]
+    let total: Int
+    let page: Int
+    let totalPages: Int
+    let artistId: String?
+}
+
+// Respuesta de /artists/dashboard/me/stats
+struct ArtistStatsResponseDTO: Codable {
+    let stats: ArtistStatsDTO
+}
+
+struct ArtistStatsDTO: Codable {
+    let artistId: String?
+    let bookings: ArtistBookingStatsDTO
+    let revenue: ArtistRevenueStatsDTO
+    let rating: ArtistRatingStatsDTO
+}
+
+struct ArtistBookingStatsDTO: Codable {
+    let total: Int
+    let thisMonth: Int
+    let pending: Int
+    let confirmed: Int
+    let completed: Int
+}
+
+struct ArtistRevenueStatsDTO: Codable {
+    let total: Double
+    let thisMonth: Double
+    let currency: String
+}
+
+struct ArtistRatingStatsDTO: Codable {
+    let average: Double
+    let totalReviews: Int
+}
+
+// Respuesta de /artists/dashboard/me
+struct ArtistProfileResponseDTO: Codable {
+    let artist: ArtistProfileDTO
+}
+
+struct ArtistProfileDTO: Codable {
+    let id: String
+    let userId: String?
+    let nombre: String?
+    let slug: String?
+    let bio: String?
+    let avatar: String?
+    let coverPhoto: String?
+    let category: String?
+    let specialties: [String]?
+    let cityId: String?
+    let country: String?
+    let experienceYears: Int?
+    let reviewsCount: Int?
+    let bookingsCount: Int?
+    let isVerified: Bool?
+    let isActive: Bool?
+    let rating: Double?
+    let imageUrl: String?
+    let baseLocationLabel: String?
+    let socialLinks: SocialLinksDTO?
+
+    var displayName: String { nombre ?? "Artista" }
 }
 
 struct BookingLocationDTO: Codable {
@@ -417,6 +498,11 @@ struct SuccessResponseDTO: Codable {
     let message: String?
 }
 
+struct EmptyResponseDTO: Codable {
+    let message: String?
+    let bookingId: String?
+}
+
 // MARK: - Health Check DTO
 struct HealthCheckDTO: Codable {
     let status: String
@@ -461,38 +547,42 @@ extension ArtistSearchDTO {
 
 extension BookingDTO {
     func toDomainModel() -> Booking {
-        let scheduledAt: Date = {
-            guard let date = date, let time = time else { return Date() }
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.timeZone = TimeZone.current
-            formatter.dateFormat = "yyyy-MM-dd HH:mm"
-            return formatter.date(from: "\(date) \(time)") ?? Date()
-        }()
+        // Usar startAt preferiblemente, si no scheduledDate
+        let dateString = startAt ?? scheduledDate ?? ""
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let scheduledAt = isoFormatter.date(from: dateString)
+            ?? ISO8601DateFormatter().date(from: dateString)
+            ?? Date()
+
         let statusValue = (status ?? "").uppercased()
         let bookingStatus: BookingStatus = {
             switch statusValue {
             case "PENDING": return .pending
             case "CONFIRMED": return .confirmed
+            case "IN_PROGRESS": return .inProgress
             case "COMPLETED": return .completed
-            case "CANCELLED": return .cancelled
-            case "RESCHEDULED": return .pending
+            case "CANCELLED", "CANCELLED_CLIENT", "CANCELLED_ARTIST", "REJECTED": return .cancelled
+            case "NO_SHOW": return .noShow
             default: return .pending
             }
         }()
 
-        let total = price ?? 0
+        // totalPrice viene en centavos
+        let total = Double(totalPrice ?? 0) / 100.0
 
         return Booking(
             remoteId: id,
-            clientName: "Cliente",
-            clientEmail: "",
+            clientName: code ?? "Cliente",
+            clientEmail: clientNotes ?? "",
             clientPhone: "",
             scheduledDate: scheduledAt,
-            duration: duration ?? 60,
+            duration: durationMinutes ?? 60,
             totalPrice: total,
-            notes: notes ?? "",
-            status: bookingStatus
+            notes: clientNotes ?? artistNotes ?? "",
+            status: bookingStatus,
+            serviceName: serviceName,
+            bookingCode: code
         )
     }
 }
