@@ -15,35 +15,35 @@ struct MainTabView: View {
             DashboardView()
                 .tabItem {
                     Image(systemName: selectedTab == 0 ? "house.fill" : "house")
-                    Text("HOME")
+                    Text("Inicio")
                 }
                 .tag(0)
 
             BookingsView()
                 .tabItem {
-                    Image(systemName: selectedTab == 1 ? "calendar.badge.clock" : "calendar.badge.clock")
-                    Text("RESERVAS")
+                    Image(systemName: "doc.text")
+                    Text("Reservas")
                 }
                 .tag(1)
 
-            MessagesView()
+            CalendarView()
                 .tabItem {
-                    Image(systemName: selectedTab == 2 ? "message.fill" : "message")
-                    Text("MESSAGES")
+                    Image(systemName: selectedTab == 2 ? "calendar" : "calendar")
+                    Text("Agenda")
                 }
                 .tag(2)
 
-            CalendarView()
+            MessagesView()
                 .tabItem {
-                    Image(systemName: selectedTab == 3 ? "calendar" : "calendar")
-                    Text("CALENDAR")
+                    Image(systemName: selectedTab == 3 ? "message.fill" : "message")
+                    Text("Mensajes")
                 }
                 .tag(3)
 
-            ServicesView()
+            MoreMenuView()
                 .tabItem {
-                    Image(systemName: selectedTab == 4 ? "bag.fill" : "bag")
-                    Text("SERVICES")
+                    Image(systemName: selectedTab == 4 ? "line.3.horizontal" : "line.3.horizontal")
+                    Text("Más")
                 }
                 .tag(4)
         }
