@@ -91,8 +91,8 @@ struct DashboardView: View {
 
             Spacer()
 
-            // PIUMA wordmark
-            Text("PIUMA")
+            // PIUMS wordmark
+            Text("PIUMS")
                 .font(.system(size: 20, weight: .heavy, design: .rounded))
                 .foregroundStyle(
                     LinearGradient(

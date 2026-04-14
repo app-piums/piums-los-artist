@@ -362,7 +362,7 @@ struct LoginView: View {
             VStack(spacing: 0) {
                 VStack(spacing: 20) {
                     // Logo
-                    Text("Piuma")
+                    Text("Piums")
                         .font(.system(size: 32, weight: .bold, design: .rounded))
                         .foregroundStyle(
                             LinearGradient(
@@ -398,7 +398,7 @@ struct LoginView: View {
                     .opacity(animateIn ? 1 : 0)
                     
                     VStack(spacing: 6) {
-                        Text("Panel de Artista")
+                        Text("Panel de Artistas Piums")
                             .font(.title2.weight(.bold))
                             .foregroundColor(.white)
                         

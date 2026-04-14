@@ -62,7 +62,7 @@ struct CalendarView: View {
             PiumsAvatarView(name: "A", imageURL: nil, size: 38,
                             gradientColors: [.piumsOrange, .piumsAccent])
             Spacer()
-            Text("Piuma")
+            Text("Piums")
                 .font(.system(size: 20, weight: .heavy, design: .rounded))
                 .foregroundColor(.piumsOrange)
             Spacer()

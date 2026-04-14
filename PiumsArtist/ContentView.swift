@@ -43,10 +43,10 @@ struct ContentView: View {
         ZStack {
             Color.piumsOrange.ignoresSafeArea()
             VStack(spacing: 20) {
-                Text("Piuma")
+                Text("Piums")
                     .font(.system(size: 42, weight: .heavy, design: .rounded))
                     .foregroundColor(.white)
-                Text("Panel de Artista")
+                Text("Panel de Artistas")
                     .font(.subheadline.weight(.medium))
                     .foregroundColor(.white.opacity(0.75))
                 ProgressView()

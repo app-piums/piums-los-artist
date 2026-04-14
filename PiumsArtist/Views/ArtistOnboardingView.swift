@@ -369,7 +369,7 @@ private struct OnbWelcomeStep: View {
 
             VStack(spacing: 0) {
                 HStack {
-                    Text("Piuma").font(.system(size:22,weight:.heavy,design:.rounded))
+                    Text("Piums").font(.system(size:22,weight:.heavy,design:.rounded))
                         .foregroundStyle(LinearGradient(colors:[.piumsOrange,.piumsAccent],startPoint:.leading,endPoint:.trailing))
                     Spacer()
                     Button("Omitir") { Task { await vm.skip() } }
