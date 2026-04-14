@@ -2,679 +2,518 @@
 //  BookingsView.swift
 //  PiumsArtist
 //
-//  Created by piums on 13/04/26.
+//  Rediseño basado en MyBookingsView de la app de cliente.
 //
 
 import SwiftUI
 import SwiftData
 
+// MARK: - BookingsView
+
 struct BookingsView: View {
     @StateObject private var viewModel = BookingsViewModel()
     @Environment(\.modelContext) private var modelContext
-    @State private var showingBookingDetail = false
     @State private var selectedBooking: Booking?
-    @State private var showingCreateBooking = false
-    
+    @State private var bookingToDecline: Booking?
+
     var body: some View {
         NavigationView {
-            VStack(spacing: 0) {
-                // Header with filters
-                headerSection
-                
-                // Content based on state
-                Group {
-                    if viewModel.isLoading {
-                        loadingState
-                    } else if viewModel.filteredBookings.isEmpty {
-                        emptyState
-                    } else {
-                        bookingsList
-                    }
+            Group {
+                if viewModel.isLoading && viewModel.bookings.isEmpty {
+                    loadingState
+                } else if viewModel.bookings.isEmpty {
+                    emptyState
+                } else {
+                    bookingsList
                 }
             }
-            .navigationBarHidden(true)
-        }
-        .onAppear {
-            viewModel.setModelContext(modelContext)
-        }
-        .refreshable {
-            await viewModel.refreshData()
-        }
-        .sheet(isPresented: $showingBookingDetail) {
-            if let booking = selectedBooking {
-                BookingDetailSheet(booking: binding(for: booking))
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-            }
-        }
-        .sheet(isPresented: $showingCreateBooking) {
-            CreateBookingSheet()
-                .presentationDetents([.large])
-        }
-        .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
-            Button("OK") {
-                viewModel.errorMessage = nil
-            }
-        } message: {
-            if let errorMessage = viewModel.errorMessage {
-                Text(errorMessage)
-            }
-        }
-    }
-    
-    // MARK: - Header Section
-    private var headerSection: some View {
-        VStack(spacing: 16) {
-            // Title and actions
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Reservas")
-                        .font(.largeTitle.weight(.bold))
-                        .foregroundColor(.piumsTextPrimary)
-                    
-                    Text("\(viewModel.filteredBookings.count) reservas")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundColor(.piumsTextSecondary)
-                }
-                
-                Spacer()
-                
-                Button(action: { showingCreateBooking = true }) {
-                    Image(systemName: "plus")
-                        .font(.title3.weight(.semibold))
-                        .foregroundColor(.white)
-                        .frame(width: 44, height: 44)
-                        .background(Color.piumsPrimary)
-                        .clipShape(Circle())
-                }
-                .buttonStyle(PiumsButtonStyle())
-            }
-            
-            // Filter chips
-            filterChips
-        }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 16)
-        .background(Color.piumsBackground)
-    }
-    
-    // MARK: - Filter Chips
-    private var filterChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                ForEach(BookingsViewModel.BookingFilter.allCases, id: \.rawValue) { filter in
-                    FilterChip(
-                        title: filter.rawValue,
-                        isSelected: viewModel.selectedFilter == filter,
-                        count: countForFilter(filter)
-                    ) {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            viewModel.updateFilter(filter)
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 20)
-        }
-    }
-    
-    // MARK: - Content States
-    private var loadingState: some View {
-        PiumsLoadingView("Cargando reservas...", style: .fullScreen)
-    }
-    
-    private var emptyState: some View {
-        PiumsEmptyState(
-            icon: "calendar.badge.plus",
-            title: emptyStateTitle,
-            message: emptyStateMessage,
-            primaryAction: PiumsEmptyState.ActionConfig("Nueva Reserva", icon: "plus.circle.fill") {
-                showingCreateBooking = true
-            },
-            secondaryAction: viewModel.selectedFilter != .all ? 
-                PiumsEmptyState.ActionConfig("Ver Todas") {
-                    viewModel.updateFilter(.all)
-                } : nil
-        )
-    }
-    
-    // MARK: - Bookings List
-    private var bookingsList: some View {
-        ScrollView {
-            LazyVStack(spacing: 12) {
-                ForEach(groupedBookings.keys.sorted(by: >), id: \.self) { date in
-                    BookingGroupSection(
-                        date: date,
-                        bookings: groupedBookings[date] ?? [],
-                        onBookingTap: { booking in
-                            selectedBooking = booking
-                            showingBookingDetail = true
-                        },
-                        onAccept: { booking in
-                            viewModel.acceptBooking(booking)
-                        },
-                        onReject: { booking in
-                            viewModel.rejectBooking(booking)
-                        },
-                        onComplete: { booking in
-                            viewModel.completeBooking(booking)
-                        }
-                    )
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 100) // Tab bar padding
-        }
-    }
-    
-    // MARK: - Helper Methods
-    private func countForFilter(_ filter: BookingsViewModel.BookingFilter) -> Int {
-        switch filter {
-        case .all: return viewModel.bookings.count
-        case .pending: return viewModel.bookings.filter { $0.status == .pending }.count
-        case .confirmed: return viewModel.bookings.filter { $0.status == .confirmed }.count
-        case .completed: return viewModel.bookings.filter { $0.status == .completed }.count
-        case .cancelled: return viewModel.bookings.filter { $0.status == .cancelled }.count
-        }
-    }
-    
-    private var emptyStateTitle: String {
-        switch viewModel.selectedFilter {
-        case .all: return "No tienes reservas"
-        case .pending: return "No hay reservas pendientes"
-        case .confirmed: return "No hay reservas confirmadas"
-        case .completed: return "No hay reservas completadas"
-        case .cancelled: return "No hay reservas canceladas"
-        }
-    }
-    
-    private var emptyStateMessage: String {
-        switch viewModel.selectedFilter {
-        case .all: return "Cuando recibas reservas aparecerán aquí. ¡Comparte tu perfil para comenzar!"
-        case .pending: return "Las reservas pendientes de confirmación aparecerán aquí"
-        case .confirmed: return "Las reservas confirmadas aparecerán aquí"
-        case .completed: return "Tus servicios completados aparecerán aquí"
-        case .cancelled: return "Las reservas canceladas aparecerán aquí"
-        }
-    }
-    
-    private var groupedBookings: [String: [Booking]] {
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateStyle = .medium
-        
-        return Dictionary(grouping: viewModel.filteredBookings) { booking in
-            dateFormatter.string(from: booking.scheduledDate)
-        }
-    }
-    
-    private func binding(for booking: Booking) -> Binding<Booking> {
-        guard let bookingIndex = viewModel.bookings.firstIndex(where: { $0.id == booking.id }) else {
-            fatalError("Can't find booking in array")
-        }
-        return $viewModel.bookings[bookingIndex]
-    }
-}
-
-// MARK: - Filter Chip Component
-struct FilterChip: View {
-    let title: String
-    let isSelected: Bool
-    let count: Int?
-    let action: () -> Void
-    
-    init(title: String, isSelected: Bool, count: Int? = nil, action: @escaping () -> Void) {
-        self.title = title
-        self.isSelected = isSelected
-        self.count = count
-        self.action = action
-    }
-    
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                
-                if let count = count, count > 0 {
-                    Text("\(count)")
-                        .font(.caption2.weight(.bold))
-                        .foregroundColor(isSelected ? .piumsPrimary : .white)
-                        .frame(width: 20, height: 20)
-                        .background(isSelected ? .white : Color.piumsPrimary.opacity(0.3))
-                        .clipShape(Circle())
-                }
-            }
-            .foregroundColor(isSelected ? .piumsPrimary : .piumsTextSecondary)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(isSelected ? Color.piumsPrimary.opacity(0.1) : Color.piumsSurface)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(isSelected ? Color.piumsPrimary : Color.clear, lineWidth: 2)
-                    )
-            )
-        }
-        .buttonStyle(PiumsButtonStyle())
-    }
-}
-
-// MARK: - Booking Group Section
-struct BookingGroupSection: View {
-    let date: String
-    let bookings: [Booking]
-    let onBookingTap: (Booking) -> Void
-    let onAccept: (Booking) -> Void
-    let onReject: (Booking) -> Void
-    let onComplete: (Booking) -> Void
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Date header
-            HStack {
-                Text(date)
-                    .font(.headline.weight(.bold))
-                    .foregroundColor(.piumsTextPrimary)
-                
-                Spacer()
-                
-                Text("\(bookings.count) reservas")
-                    .font(.caption.weight(.medium))
-                    .foregroundColor(.piumsTextSecondary)
-            }
-            
-            // Bookings cards
-            VStack(spacing: 8) {
-                ForEach(bookings, id: \.id) { booking in
-                    ModernBookingRow(
-                        booking: booking,
-                        onTap: { onBookingTap(booking) },
-                        onAccept: { onAccept(booking) },
-                        onReject: { onReject(booking) },
-                        onComplete: { onComplete(booking) }
-                    )
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Modern Booking Row
-struct ModernBookingRow: View {
-    let booking: Booking
-    let onTap: () -> Void
-    let onAccept: () -> Void
-    let onReject: () -> Void
-    let onComplete: () -> Void
-    
-    var body: some View {
-        Button(action: onTap) {
-            PiumsCard(style: .bordered, padding: 16) {
-                VStack(spacing: 16) {
-                    // Main booking info
-                    HStack(spacing: 16) {
-                        // Time section
-                        VStack(spacing: 4) {
-                            Text(booking.scheduledDate, formatter: timeFormatter)
-                                .font(.title3.weight(.bold))
-                                .foregroundColor(.piumsPrimary)
-                            
-                            Text("\(booking.duration)min")
-                                .font(.caption2.weight(.medium))
-                                .foregroundColor(.piumsTextTertiary)
-                        }
-                        .frame(width: 70)
-                        
-                        // Booking details
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text(booking.clientName)
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundColor(.piumsTextPrimary)
-                                
-                                Spacer()
-                                
-                                PiumsStatusBadge(
-                                    statusText(for: booking.status),
-                                    status: badgeStatus(for: booking.status),
-                                    size: .small
-                                )
-                            }
-                            
-                            if !booking.notes.isEmpty {
-                                Text(booking.notes)
-                                    .font(.caption)
-                                    .foregroundColor(.piumsTextSecondary)
-                                    .lineLimit(2)
-                            }
-                            
-                            HStack(spacing: 12) {
-                                Label("\(booking.clientEmail)", systemImage: "envelope")
-                                    .font(.caption)
-                                    .foregroundColor(.piumsTextTertiary)
-                                
-                                if !booking.clientPhone.isEmpty {
-                                    Label("\(booking.clientPhone)", systemImage: "phone")
-                                        .font(.caption)
-                                        .foregroundColor(.piumsTextTertiary)
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Actions row
-                    if booking.status == .pending {
+            // Barra de filtros pegada bajo la navbar
+            .safeAreaInset(edge: .top, spacing: 0) {
+                VStack(spacing: 0) {
+                    ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
-                            PiumsButton(
-                                "Rechazar",
-                                icon: "xmark",
-                                style: .outline,
-                                size: .small,
-                                action: onReject
-                            )
-                            
-                            PiumsButton(
-                                "Aceptar",
-                                icon: "checkmark",
-                                style: .success,
-                                size: .small,
-                                action: onAccept
-                            )
-                        }
-                    } else if booking.status == .confirmed {
-                        HStack {
-                            Text("💰 $\(Int(booking.totalPrice))")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundColor(.piumsSuccess)
-                            
-                            Spacer()
-                            
-                            PiumsButton(
-                                "Completar",
-                                icon: "checkmark.circle",
-                                style: .success,
-                                size: .small,
-                                action: onComplete
-                            )
-                        }
-                    } else if booking.status == .completed {
-                        HStack {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.piumsSuccess)
-                            
-                            Text("Servicio completado - $\(Int(booking.totalPrice))")
-                                .font(.subheadline.weight(.medium))
-                                .foregroundColor(.piumsSuccess)
-                            
-                            Spacer()
-                        }
-                    }
-                }
-            }
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-    
-    private var timeFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .none
-        formatter.timeStyle = .short
-        return formatter
-    }
-    
-    private func statusText(for status: BookingStatus) -> String {
-        switch status {
-        case .pending: return "Pendiente"
-        case .confirmed: return "Confirmada"
-        case .inProgress: return "En Progreso"
-        case .completed: return "Completada"
-        case .cancelled: return "Cancelada"
-        case .noShow: return "No Asistió"
-        }
-    }
-    
-    private func badgeStatus(for status: BookingStatus) -> PiumsStatusBadge.BadgeStatus {
-        switch status {
-        case .pending: return .warning
-        case .confirmed: return .success
-        case .inProgress: return .info
-        case .completed: return .success
-        case .cancelled: return .error
-        case .noShow: return .error
-        }
-    }
-}
-
-// MARK: - Booking Detail Sheet
-struct BookingDetailSheet: View {
-    @Binding var booking: Booking
-    @Environment(\.dismiss) private var dismiss
-    
-    var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(spacing: 24) {
-                    // Header info
-                    PiumsCard(style: .highlighted) {
-                        VStack(spacing: 16) {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(booking.clientName)
-                                        .font(.title2.weight(.bold))
-                                        .foregroundColor(.piumsTextPrimary)
-                                    
-                                    Text("Cliente desde hace 2 meses")
-                                        .font(.subheadline)
-                                        .foregroundColor(.piumsTextSecondary)
-                                }
-                                
-                                Spacer()
-                                
-                                AsyncImage(url: URL(string: "https://i.pravatar.cc/150?img=2")) { image in
-                                    image
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                } placeholder: {
-                                    Image(systemName: "person.fill")
-                                        .foregroundColor(.piumsPrimary)
-                                        .font(.title2)
-                                }
-                                .frame(width: 60, height: 60)
-                                .background(Color.piumsPrimary.opacity(0.1))
-                                .clipShape(Circle())
-                            }
-                            
-                            Divider()
-                            
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Fecha y Hora")
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundColor(.piumsTextSecondary)
-                                    
-                                    Text("\(booking.scheduledDate, formatter: detailDateFormatter)")
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundColor(.piumsTextPrimary)
-                                }
-                                
-                                Spacer()
-                                
-                                VStack(alignment: .trailing, spacing: 4) {
-                                    Text("Duración")
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundColor(.piumsTextSecondary)
-                                    
-                                    Text("\(booking.duration) minutos")
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundColor(.piumsTextPrimary)
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Service details
-                    PiumsCard {
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Detalles del Servicio")
-                                .font(.headline.weight(.bold))
-                                .foregroundColor(.piumsTextPrimary)
-                            
-                            VStack(spacing: 12) {
-                                DetailRow(label: "Servicio", value: "Corte y Peinado Premium")
-                                DetailRow(label: "Precio", value: "$\(Int(booking.totalPrice))")
-                                
-                                if !booking.notes.isEmpty {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text("Notas")
-                                            .font(.subheadline.weight(.semibold))
-                                            .foregroundColor(.piumsTextSecondary)
-                                        
-                                        Text(booking.notes)
-                                            .font(.body)
-                                            .foregroundColor(.piumsTextPrimary)
+                            ForEach(BookingsViewModel.BookingFilter.allCases, id: \.rawValue) { filter in
+                                StatusFilterChip(
+                                    title: filter.rawValue,
+                                    isSelected: viewModel.selectedFilter == filter
+                                ) {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        viewModel.updateFilter(filter)
                                     }
                                 }
                             }
                         }
+                        .padding(.horizontal)
+                        .padding(.vertical, 10)
                     }
-                    
-                    // Contact info
-                    PiumsCard {
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Información de Contacto")
-                                .font(.headline.weight(.bold))
-                                .foregroundColor(.piumsTextPrimary)
-                            
-                            VStack(spacing: 12) {
-                                ContactRow(icon: "envelope.fill", label: "Email", value: booking.clientEmail)
-                                
-                                if !booking.clientPhone.isEmpty {
-                                    ContactRow(icon: "phone.fill", label: "Teléfono", value: booking.clientPhone)
-                                }
+                    Divider()
+                }
+                .background(.bar)
+            }
+            .navigationTitle("Mis Reservas")
+            .refreshable { await viewModel.refreshData() }
+        }
+        .onAppear { viewModel.setModelContext(modelContext) }
+        .sheet(item: $selectedBooking) { booking in
+            ArtistBookingDetailView(
+                booking: booking,
+                onAccept: { viewModel.acceptBooking(booking) },
+                onReject: { bookingToDecline = booking },
+                onComplete: { viewModel.completeBooking(booking) }
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .confirmationDialog(
+            "¿Rechazar esta reserva?",
+            isPresented: Binding(get: { bookingToDecline != nil }, set: { if !$0 { bookingToDecline = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Sí, rechazar", role: .destructive) {
+                if let b = bookingToDecline { viewModel.rejectBooking(b) }
+                bookingToDecline = nil
+            }
+            Button("No", role: .cancel) { bookingToDecline = nil }
+        }
+    }
+
+    // MARK: - Bookings List
+    private var bookingsList: some View {
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                if let msg = viewModel.errorMessage {
+                    errorBanner(msg)
+                }
+                ForEach(viewModel.filteredBookings) { booking in
+                    ArtistBookingRow(booking: booking)
+                        .padding(.horizontal)
+                        .contentShape(Rectangle())
+                        .onTapGesture { selectedBooking = booking }
+                }
+                Color.clear.frame(height: 12)
+            }
+            .padding(.vertical, 8)
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    // MARK: - States
+    private var loadingState: some View {
+        VStack(spacing: 16) {
+            ProgressView().scaleEffect(1.3)
+            Text("Cargando reservas…")
+                .font(.subheadline).foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "calendar.badge.minus")
+                .font(.system(size: 50))
+                .foregroundColor(.secondary.opacity(0.5))
+            Text(emptyTitle)
+                .font(.headline)
+            Text(emptyMessage)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func errorBanner(_ msg: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.piumsWarning)
+            Text(msg).font(.caption).foregroundColor(.secondary)
+            Spacer()
+        }
+        .padding(12)
+        .background(Color.piumsWarning.opacity(0.1))
+        .cornerRadius(10)
+        .padding(.horizontal)
+    }
+
+    private var emptyTitle: String {
+        switch viewModel.selectedFilter {
+        case .all: return "Sin reservas"
+        case .pending: return "Sin pendientes"
+        case .confirmed: return "Sin confirmadas"
+        case .completed: return "Sin completadas"
+        case .cancelled: return "Sin canceladas"
+        }
+    }
+
+    private var emptyMessage: String {
+        switch viewModel.selectedFilter {
+        case .all: return "Cuando recibas reservas aparecerán aquí. ¡Comparte tu perfil para comenzar!"
+        default: return "Las reservas con este estado aparecerán aquí"
+        }
+    }
+}
+
+// MARK: - StatusFilterChip (estilo cliente)
+
+private struct StatusFilterChip: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.subheadline.weight(.medium))
+                .padding(.horizontal, 14).padding(.vertical, 7)
+                .background(isSelected ? Color.piumsOrange : Color(.secondarySystemBackground))
+                .foregroundStyle(isSelected ? .white : .primary)
+                .clipShape(Capsule())
+        }
+        .animation(.easeInOut(duration: 0.2), value: isSelected)
+    }
+}
+
+// MARK: - ArtistBookingRow (estilo BookingRowView del cliente)
+
+struct ArtistBookingRow: View {
+    let booking: Booking
+
+    var body: some View {
+        HStack(spacing: 14) {
+            // Icono estado
+            Circle()
+                .fill(statusColor.opacity(0.15))
+                .frame(width: 44, height: 44)
+                .overlay(
+                    Image(systemName: statusIcon)
+                        .foregroundStyle(statusColor)
+                )
+
+            VStack(alignment: .leading, spacing: 4) {
+                // Código + precio
+                HStack {
+                    Text(booking.bookingCode ?? booking.clientName)
+                        .font(.headline)
+                    Spacer()
+                    Text(formattedPrice)
+                        .font(.subheadline.bold())
+                        .foregroundStyle(Color.piumsOrange)
+                }
+
+                // Badge status
+                Text(statusLabel)
+                    .font(.caption.bold())
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(statusColor.opacity(0.12))
+                    .foregroundStyle(statusColor)
+                    .clipShape(Capsule())
+
+                // Fecha + hora
+                HStack(spacing: 4) {
+                    Image(systemName: "calendar").font(.caption2)
+                    Text(formattedDate)
+                    Text("·")
+                    Image(systemName: "clock").font(.caption2)
+                    Text(formattedTime)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                // Nombre del servicio si existe
+                if let svc = booking.serviceName, !svc.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "bag").font(.caption2)
+                        Text(svc)
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(14)
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    // MARK: - Helpers
+
+    private var formattedPrice: String {
+        let q = booking.totalPrice
+        if q == 0 { return "" }
+        return String(format: "Q %.2f", q)
+    }
+
+    private var formattedDate: String {
+        let f = DateFormatter()
+        f.dateFormat = "d MMM yyyy"
+        f.locale = Locale(identifier: "es_ES")
+        return f.string(from: booking.scheduledDate)
+    }
+
+    private var formattedTime: String {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f.string(from: booking.scheduledDate)
+    }
+
+    private var statusLabel: String {
+        switch booking.status {
+        case .pending:    return "Pendiente"
+        case .confirmed:  return "Confirmada"
+        case .inProgress: return "En progreso"
+        case .completed:  return "Completada"
+        case .cancelled:  return "Cancelada"
+        case .noShow:     return "No asistió"
+        }
+    }
+
+    private var statusColor: Color {
+        switch booking.status {
+        case .pending:    return .orange
+        case .confirmed:  return .blue
+        case .inProgress: return .piumsOrange
+        case .completed:  return .green
+        case .cancelled:  return .red
+        case .noShow:     return .red
+        }
+    }
+
+    private var statusIcon: String {
+        switch booking.status {
+        case .pending:    return "clock"
+        case .confirmed:  return "checkmark.circle"
+        case .inProgress: return "play.circle"
+        case .completed:  return "checkmark.seal"
+        case .cancelled:  return "xmark.circle"
+        case .noShow:     return "person.slash"
+        }
+    }
+}
+
+// MARK: - ArtistBookingDetailView (estilo BookingDetailView del cliente)
+
+struct ArtistBookingDetailView: View {
+    let booking: Booking
+    let onAccept: () -> Void
+    let onReject: () -> Void
+    let onComplete: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 20) {
+                    // ── Hero: estado ──
+                    VStack(spacing: 14) {
+                        ZStack {
+                            Circle().fill(statusColor.opacity(0.15)).frame(width: 72, height: 72)
+                            Image(systemName: statusIcon).font(.system(size: 36)).foregroundStyle(statusColor)
+                        }
+                        VStack(spacing: 4) {
+                            Text(statusLabel).font(.title2.bold())
+                            if let code = booking.bookingCode {
+                                Text(code)
+                                    .font(.caption.weight(.semibold).monospaced())
+                                    .foregroundStyle(.secondary)
                             }
                         }
                     }
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 40)
-            }
-            .navigationTitle("Detalle de Reserva")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationBarBackButtonHidden(true)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cerrar") { dismiss() }
-                        .foregroundColor(.piumsPrimary)
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Menu {
-                        Button("Llamar Cliente", systemImage: "phone") {
-                            // Call action
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 24)
+                    .background(statusColor.opacity(0.06))
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                    .padding(.horizontal, 20)
+
+                    // ── Código de reserva ──
+                    if let code = booking.bookingCode {
+                        VStack(spacing: 6) {
+                            Text("CÓDIGO DE RESERVA")
+                                .font(.caption2.weight(.semibold)).foregroundStyle(.secondary).tracking(1.2)
+                            Text(code).font(.title3.bold().monospaced())
                         }
-                        
-                        Button("Enviar Mensaje", systemImage: "message") {
-                            // Message action  
-                        }
-                        
-                        Button("Cancelar Reserva", systemImage: "xmark.circle") {
-                            // Cancel action
-                        }
-                        .foregroundColor(.piumsError)
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                            .foregroundColor(.piumsPrimary)
+                        .frame(maxWidth: .infinity).padding(.vertical, 18)
+                        .background(Color.piumsOrange.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.piumsOrange.opacity(0.2)))
+                        .padding(.horizontal, 20)
                     }
-                }
-            }
-        }
-    }
-    
-    private var detailDateFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .full
-        formatter.timeStyle = .short
-        return formatter
-    }
-}
 
-// MARK: - Create Booking Sheet
-struct CreateBookingSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    
-    var body: some View {
-        NavigationView {
-            PiumsEmptyState(
-                icon: "calendar.badge.plus",
-                title: "Crear Nueva Reserva",
-                message: "Esta funcionalidad se implementará próximamente",
-                primaryAction: PiumsEmptyState.ActionConfig("Cerrar") {
-                    dismiss()
+                    // ── Info del evento ──
+                    detailCard("Información del Evento") {
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
+                            infoCell("FECHA") {
+                                Text(formattedDateLong).font(.subheadline.bold()).lineLimit(2)
+                                Text(formattedTime).font(.caption).foregroundStyle(.secondary)
+                            }
+                            infoCell("DURACIÓN") {
+                                Text("\(booking.duration) min").font(.subheadline.bold())
+                            }
+                            infoCell("ESTADO") {
+                                HStack(spacing: 5) {
+                                    Circle().fill(statusColor).frame(width: 7, height: 7)
+                                    Text(statusLabel).font(.caption.weight(.semibold)).foregroundStyle(statusColor)
+                                }
+                            }
+                            infoCell("CLIENTE") {
+                                Text(booking.clientName).font(.subheadline.bold()).lineLimit(1)
+                            }
+                        }
+                    }
+
+                    // ── Resumen de pago ──
+                    detailCard("Resumen de Pago") {
+                        VStack(spacing: 12) {
+                            if let svc = booking.serviceName, !svc.isEmpty {
+                                payRow(label: svc, value: formattedPrice, bold: false)
+                                Divider()
+                            }
+                            payRow(label: "Total", value: formattedPrice, bold: true)
+                        }
+                    }
+
+                    // ── Notas ──
+                    if !booking.notes.isEmpty {
+                        detailCard("Notas") {
+                            Text(booking.notes).font(.subheadline).foregroundStyle(.secondary)
+                        }
+                    }
+
+                    // ── Acciones del artista ──
+                    if booking.status == .pending {
+                        detailCard("Acciones") {
+                            VStack(spacing: 10) {
+                                actionBtn(icon: "checkmark.circle.fill", label: "Aceptar reserva", color: .green) {
+                                    onAccept(); dismiss()
+                                }
+                                Divider()
+                                actionBtn(icon: "xmark.circle.fill", label: "Rechazar reserva", color: .red) {
+                                    onReject(); dismiss()
+                                }
+                            }
+                        }
+                    } else if booking.status == .confirmed {
+                        detailCard("Acciones") {
+                            actionBtn(icon: "checkmark.seal.fill", label: "Marcar como completada", color: .green) {
+                                onComplete(); dismiss()
+                            }
+                        }
+                    }
+
+                    Color.clear.frame(height: 20)
                 }
-            )
-            .navigationTitle("Nueva Reserva")
+                .padding(.top, 16)
+            }
+            .scrollIndicators(.hidden)
+            .navigationTitle(booking.bookingCode ?? "Detalle")
             .navigationBarTitleDisplayMode(.inline)
-            .navigationBarBackButtonHidden(true)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button("Cerrar") { dismiss() }
-                        .foregroundColor(.piumsPrimary)
                 }
             }
         }
     }
-}
 
-// MARK: - Supporting Views
-struct DetailRow: View {
-    let label: String
-    let value: String
-    
-    var body: some View {
+    // MARK: - Sub-views
+
+    @ViewBuilder
+    private func detailCard<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(title).font(.headline)
+            content()
+        }
+        .padding(18)
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .padding(.horizontal, 20)
+    }
+
+    @ViewBuilder
+    private func infoCell<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(label).font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary).tracking(0.8)
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func payRow(label: String, value: String, bold: Bool) -> some View {
         HStack {
-            Text(label)
-                .font(.subheadline.weight(.medium))
-                .foregroundColor(.piumsTextSecondary)
-            
+            Text(label).font(bold ? .headline : .subheadline).foregroundStyle(bold ? .primary : .secondary)
             Spacer()
-            
-            Text(value)
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(.piumsTextPrimary)
+            Text(value).font(bold ? .title3.bold() : .subheadline.weight(.medium))
+                .foregroundStyle(bold ? Color.piumsOrange : .primary)
         }
     }
-}
 
-struct ContactRow: View {
-    let icon: String
-    let label: String
-    let value: String
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.subheadline)
-                .foregroundColor(.piumsPrimary)
-                .frame(width: 20)
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.piumsTextSecondary)
-                
-                Text(value)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundColor(.piumsTextPrimary)
+    @ViewBuilder
+    private func actionBtn(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 9).fill(color.opacity(0.12)).frame(width: 36, height: 36)
+                    Image(systemName: icon).font(.system(size: 15)).foregroundStyle(color)
+                }
+                Text(label).font(.subheadline.weight(.medium)).foregroundStyle(.primary)
+                Spacer()
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
             }
-            
-            Spacer()
-            
-            Button(action: {}) {
-                Image(systemName: "arrow.up.right")
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(.piumsPrimary)
-            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Helpers
+
+    private var formattedPrice: String {
+        let q = booking.totalPrice
+        if q == 0 { return "Q 0.00" }
+        return String(format: "Q %.2f", q)
+    }
+
+    private var formattedDateLong: String {
+        let f = DateFormatter()
+        f.dateFormat = "EEEE d 'de' MMMM, yyyy"
+        f.locale = Locale(identifier: "es_ES")
+        return f.string(from: booking.scheduledDate).capitalized
+    }
+
+    private var formattedTime: String {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a"
+        return f.string(from: booking.scheduledDate)
+    }
+
+    private var statusLabel: String {
+        switch booking.status {
+        case .pending:    return "Pendiente"
+        case .confirmed:  return "Confirmada"
+        case .inProgress: return "En progreso"
+        case .completed:  return "Completada"
+        case .cancelled:  return "Cancelada"
+        case .noShow:     return "No asistió"
+        }
+    }
+
+    private var statusColor: Color {
+        switch booking.status {
+        case .pending:    return .orange
+        case .confirmed:  return .blue
+        case .inProgress: return .piumsOrange
+        case .completed:  return .green
+        case .cancelled:  return .red
+        case .noShow:     return .red
+        }
+    }
+
+    private var statusIcon: String {
+        switch booking.status {
+        case .pending:    return "clock"
+        case .confirmed:  return "checkmark.circle.fill"
+        case .inProgress: return "play.circle.fill"
+        case .completed:  return "checkmark.seal.fill"
+        case .cancelled:  return "xmark.circle.fill"
+        case .noShow:     return "person.slash.fill"
         }
     }
 }

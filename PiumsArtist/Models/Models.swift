@@ -122,7 +122,7 @@ final class Service {
 }
 
 @Model
-final class Booking {
+final class Booking: Identifiable, Hashable {
     var id: UUID
     var remoteId: String
     var clientName: String
@@ -137,6 +137,9 @@ final class Booking {
     var bookingCode: String?
     var createdAt: Date
     var updatedAt: Date
+
+    static func == (lhs: Booking, rhs: Booking) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
     
     init(
         remoteId: String = UUID().uuidString,
