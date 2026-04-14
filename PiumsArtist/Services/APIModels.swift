@@ -221,6 +221,7 @@ struct ArtistStatsDTO: Codable {
     let bookings: ArtistBookingStatsDTO
     let revenue: ArtistRevenueStatsDTO
     let rating: ArtistRatingStatsDTO
+    let upcomingBookings: [BookingDTO]?
 }
 
 struct ArtistBookingStatsDTO: Codable {
@@ -250,7 +251,9 @@ struct ArtistProfileResponseDTO: Codable {
 struct ArtistProfileDTO: Codable {
     let id: String
     let userId: String?
+    let email: String?
     let nombre: String?
+    let artistName: String?
     let slug: String?
     let bio: String?
     let avatar: String?
@@ -258,6 +261,7 @@ struct ArtistProfileDTO: Codable {
     let category: String?
     let specialties: [String]?
     let cityId: String?
+    let city: String?
     let country: String?
     let experienceYears: Int?
     let reviewsCount: Int?
@@ -269,7 +273,7 @@ struct ArtistProfileDTO: Codable {
     let baseLocationLabel: String?
     let socialLinks: SocialLinksDTO?
 
-    var displayName: String { nombre ?? "Artista" }
+    var displayName: String { artistName ?? nombre ?? "Artista" }
 }
 
 struct BookingLocationDTO: Codable {

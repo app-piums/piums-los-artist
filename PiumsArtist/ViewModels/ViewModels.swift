@@ -585,23 +585,24 @@ final class ProfileViewModel: ObservableObject {
         errorMessage = nil
         
         do {
-            // Cargar perfil y stats en paralelo
-            async let profileTask = apiService.get(
+            // 1. Cargar perfil del artista
+            let profileResp = try await apiService.get(
                 endpoint: .artistDashboard,
                 responseType: ArtistProfileResponseDTO.self
             )
+            let profile = profileResp.artist
+            
+            // 2. Cargar stats en paralelo con los servicios del artista
             async let statsTask = apiService.get(
                 endpoint: .artistStats,
                 responseType: ArtistStatsResponseDTO.self
             )
             async let servicesTask = apiService.get(
-                endpoint: .catalogServices(artistId: nil, category: nil),
-                responseType: [ServiceDTO].self
+                endpoint: .catalogServices(artistId: profile.id, category: nil),
+                responseType: ServicesResponseDTO.self
             )
             
-            let (profileResp, statsResp, servicesResp) = try await (profileTask, statsTask, servicesTask)
-            
-            let profile = profileResp.artist
+            let (statsResp, servicesResp) = try await (statsTask, servicesTask)
             let stats = statsResp.stats
             
             // Convertir perfil a modelo local
@@ -614,7 +615,7 @@ final class ProfileViewModel: ObservableObject {
             }
             self.artist = currentArtist ?? Artist(
                 name: profile.displayName,
-                email: "",
+                email: profile.email ?? "",
                 profession: profile.category ?? "Artista",
                 specialty: profile.specialties?.joined(separator: ", ") ?? "",
                 bio: profile.bio ?? "",
@@ -623,7 +624,7 @@ final class ProfileViewModel: ObservableObject {
                 isVerified: profile.isVerified ?? false
             )
             
-            self.services = servicesResp.map { $0.toDomainModel() }
+            self.services = servicesResp.services.map { $0.toDomainModel() }
             
             self.statistics = ProfileStatistics(
                 totalClients: stats.bookings.total,
