@@ -326,7 +326,7 @@ struct LoginView: View {
             }
         }
         .alert("Error de Login", isPresented: .constant(authService.errorMessage != nil)) {
-            Button("OK") { authService.errorMessage = nil }
+            Button("Aceptar") { authService.errorMessage = nil }
         } message: {
             Text(authService.errorMessage ?? "")
         }
@@ -442,7 +442,7 @@ struct LoginView: View {
                 VStack(spacing: 16) {
                     // Email
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("EMAIL")
+                        Text("CORREO")
                             .font(.caption.weight(.semibold))
                             .foregroundColor(.secondary)
                             .tracking(0.5)

@@ -73,7 +73,7 @@ struct BookingsView: View {
                 if let b = bookingToDecline { viewModel.rejectBooking(b) }
                 bookingToDecline = nil
             }
-            Button("No", role: .cancel) { bookingToDecline = nil }
+            Button("Cancelar", role: .cancel) { bookingToDecline = nil }
         }
     }
 

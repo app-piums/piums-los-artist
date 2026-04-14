@@ -352,7 +352,7 @@ struct EditProfileView: View {
                 Section("Contacto") {
                     TextField("Teléfono", text: $tempArtist.phone)
                         .keyboardType(.phonePad)
-                    TextField("Email", text: $tempArtist.email)
+                    TextField("Correo electrónico", text: $tempArtist.email)
                         .keyboardType(.emailAddress)
                 }
                 
@@ -480,17 +480,13 @@ struct SettingsView: View {
 
                 // ── Apariencia ──
                 Section("Apariencia") {
-                    Picker(selection: $themeManager.storedScheme) {
-                        Label("Sistema", systemImage: "circle.lefthalf.filled")
-                            .tag("system")
-                        Label("Claro", systemImage: "sun.max.fill")
-                            .tag("light")
-                        Label("Oscuro", systemImage: "moon.fill")
-                            .tag("dark")
-                    } label: {
-                        Label("Tema", systemImage: "paintbrush.fill")
+                    Toggle(isOn: Binding(
+                        get: { themeManager.storedScheme == "dark" },
+                        set: { themeManager.storedScheme = $0 ? "dark" : "light" }
+                    )) {
+                        Label("Modo oscuro", systemImage: "moon.fill")
                     }
-                    .pickerStyle(.navigationLink)
+                    .tint(.piumsOrange)
                 }
 
                 // ── Ayuda y soporte ──
