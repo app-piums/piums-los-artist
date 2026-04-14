@@ -2,23 +2,56 @@
 //  ContentView.swift
 //  PiumsArtist
 //
-//  Created by piums on 13/04/26.
-//
 
 import SwiftUI
 import SwiftData
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
     @StateObject private var authService = AuthService.shared
+    @AppStorage("hasSeenArtistOnboarding") private var hasSeenOnboarding = false
+    @State private var isLoading = true
 
     var body: some View {
-        AuthenticatedView {
-            MainTabView()
+        Group {
+            if isLoading {
+                splashScreen
+            } else if !hasSeenOnboarding {
+                ArtistOnboardingView {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        hasSeenOnboarding = true
+                    }
+                }
+            } else if authService.isLoggedIn {
+                MainTabView()
+            } else {
+                LoginView()
+            }
         }
-        .onAppear {
-            Task {
-                await authService.attemptAutoLogin()
+        .animation(.easeInOut(duration: 0.3), value: authService.isLoggedIn)
+        .animation(.easeInOut(duration: 0.3), value: hasSeenOnboarding)
+        .task {
+            // Intenta auto-login con token guardado
+            await authService.attemptAutoLogin()
+            // Splash mínimo de 1.5s
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            withAnimation { isLoading = false }
+        }
+    }
+
+    // MARK: - Splash Screen
+    private var splashScreen: some View {
+        ZStack {
+            Color.piumsOrange.ignoresSafeArea()
+            VStack(spacing: 20) {
+                Text("Piuma")
+                    .font(.system(size: 42, weight: .heavy, design: .rounded))
+                    .foregroundColor(.white)
+                Text("Panel de Artista")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundColor(.white.opacity(0.75))
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    .padding(.top, 8)
             }
         }
     }
