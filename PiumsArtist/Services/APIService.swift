@@ -62,6 +62,8 @@ enum APIEndpoint {
     case artistCancelBooking(String)
     
     // Absences
+    case createArtistProfile
+    case setArtistAvailability
     case artistAbsences
     case createAbsence
     case deleteAbsence(String)
@@ -200,6 +202,11 @@ enum APIEndpoint {
             return "/artists/dashboard/me/bookings/\(id)/complete"
         case .artistCancelBooking(let id):
             return "/artists/dashboard/me/bookings/\(id)/cancel"
+            
+        case .createArtistProfile:
+            return "/artists/dashboard/me/profile"
+        case .setArtistAvailability:
+            return "/artists/dashboard/me/availability"
             
         // Absences
         case .artistAbsences:
