@@ -398,7 +398,7 @@ private struct OnbWelcomeStep: View {
 
                     // Steps preview
                     VStack(alignment:.leading, spacing:8) {
-                        ForEach(["🎨 Elige tu disciplina","🛠 Define tu equipo","👤 Agrega tu bio y portafolio","💼 Crea tu primer servicio","💰 Establece tus tarifas","📅 Configura disponibilidad"], id:\.self) { item in
+                        ForEach(["⚡ Elige tu superpoder creativo","🛠 Define tu equipo","👤 Agrega tu bio y portafolio","💼 Crea tu primer servicio","💰 Establece tus tarifas","📅 Configura disponibilidad"], id:\.self) { item in
                             HStack(spacing:8) {
                                 Text(item).font(.caption).foregroundColor(.white.opacity(0.7))
                             }
@@ -447,8 +447,8 @@ private struct OnbDisciplineStep: View {
             OnbProgressBar(value: vm.progressValue).padding(.horizontal,24).padding(.top,4).padding(.bottom,20)
 
             VStack(alignment:.leading, spacing:6) {
-                Text("¿Cuál es tu disciplina creativa?").font(.title2.bold())
-                Text("Selecciona el rol que mejor te describe. Esto personaliza tu perfil.")
+                Text("¿Cuál es tu superpoder creativo?").font(.title2.bold())
+                Text("Selecciona el rol que mejor te describe. Personalizaremos tu perfil y tus servicios.")
                     .font(.subheadline).foregroundStyle(.secondary)
             }
             .frame(maxWidth:.infinity, alignment:.leading).padding(.horizontal,24).padding(.bottom,12)
