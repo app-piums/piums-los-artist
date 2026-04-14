@@ -121,6 +121,7 @@ final class Service {
 @Model
 final class Booking {
     var id: UUID
+    var remoteId: String
     var clientName: String
     var clientEmail: String
     var clientPhone: String
@@ -133,6 +134,7 @@ final class Booking {
     var updatedAt: Date
     
     init(
+        remoteId: String = UUID().uuidString,
         clientName: String,
         clientEmail: String,
         clientPhone: String = "",
@@ -143,6 +145,7 @@ final class Booking {
         status: BookingStatus = .pending
     ) {
         self.id = UUID()
+        self.remoteId = remoteId
         self.clientName = clientName
         self.clientEmail = clientEmail
         self.clientPhone = clientPhone
@@ -206,6 +209,7 @@ extension Service {
 extension Booking {
     static let previewBookings = [
         Booking(
+            remoteId: "mock-1",
             clientName: "Ana López",
             clientEmail: "ana.lopez@email.com",
             clientPhone: "+34 666 111 222",
@@ -216,6 +220,7 @@ extension Booking {
             status: .confirmed
         ),
         Booking(
+            remoteId: "mock-2",
             clientName: "Carlos Martín",
             clientEmail: "carlos.martin@email.com",
             scheduledDate: Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date(),

@@ -141,7 +141,7 @@ struct ServiceDTO: Codable {
     let categoryId: String?
     let cityId: String?
     let pricingType: String?    // FIXED, HOURLY, etc.
-    let basePrice: Double?
+    let basePrice: Int?         // Cambiado a Int? (centavos)
     let currency: String?
     let durationMin: Int?
     let durationMax: Int?
@@ -159,7 +159,7 @@ struct ServiceDTO: Codable {
     
     // Compat: title → name
     var title: String { name }
-    var price: Double { basePrice ?? 0 }
+    var priceDecimal: Double { Double(basePrice ?? 0) / 100.0 } // Helper para precio en formato decimal
     var active: Bool { status == "ACTIVE" || isAvailable == true }
     var duration: Int { durationMin ?? 60 }
 }
@@ -170,33 +170,35 @@ struct ServiceCategoryDTO: Codable {
     let slug: String?
 }
 
-// MARK: - Booking DTOs  (estructura real de /bookings)
+// MARK: - Booking DTOs (estructura OpenAPI)
 struct BookingDTO: Codable {
     let id: String
     let clientId: String?
     let artistId: String?
     let serviceId: String?
-    let scheduledDate: String?  // ISO8601
-    let scheduledTime: String?  // HH:mm
-    let durationMinutes: Int?
-    let status: String?         // PENDING, CONFIRMED, CANCELLED, COMPLETED
-    let totalAmount: Double?
-    let currency: String?
+    let date: String?
+    let time: String?
+    let duration: Int?
+    let location: BookingLocationDTO?
+    let price: Double?
+    let status: String?
     let paymentStatus: String?
     let confirmationCode: String?
     let notes: String?
+    let rescheduledAt: String?
+    let rescheduleReason: String?
+    let rescheduleCount: Int?
     let createdAt: String?
-    let updatedAt: String?
-    // Nested objects (pueden venir o no)
-    let client: BookingClientDTO?
-    let service: BookingServiceDTO?
-    let location: BookingLocationDTO?
-    // Compat legacies
-    let date: String?
-    let time: String?
-    let price: Double?
 }
 
+struct BookingLocationDTO: Codable {
+    let address: String?
+    let city: String?
+    let postalCode: String?
+    let coordinates: CoordinatesDTO?
+}
+
+// Estas DTOs se conservan por compatibilidad si el backend las expone en el futuro
 struct BookingClientDTO: Codable {
     let id: String?
     let nombre: String?
@@ -208,14 +210,7 @@ struct BookingClientDTO: Codable {
 struct BookingServiceDTO: Codable {
     let id: String?
     let name: String?
-    let basePrice: Double?
-}
-
-struct BookingLocationDTO: Codable {
-    let address: String?
-    let city: String?
-    let postalCode: String?
-    let coordinates: CoordinatesDTO?
+    let basePrice: Int?
 }
 
 struct CreateBookingRequest: Codable {
@@ -466,40 +461,36 @@ extension ArtistSearchDTO {
 
 extension BookingDTO {
     func toDomainModel() -> Booking {
-        // Parsear fecha desde scheduledDate (ISO8601) o date+time legacy
-        var scheduledAt: Date = Date()
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let iso2 = ISO8601DateFormatter()
-
-        if let sd = scheduledDate {
-            scheduledAt = iso.date(from: sd) ?? iso2.date(from: sd) ?? Date()
-        } else if let d = date, let t = time {
-            let str = "\(d)T\(t):00.000Z"
-            scheduledAt = iso.date(from: str) ?? Date()
-        }
-
+        let scheduledAt: Date = {
+            guard let date = date, let time = time else { return Date() }
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone.current
+            formatter.dateFormat = "yyyy-MM-dd HH:mm"
+            return formatter.date(from: "\(date) \(time)") ?? Date()
+        }()
+        let statusValue = (status ?? "").uppercased()
         let bookingStatus: BookingStatus = {
-            switch (status ?? "").uppercased() {
-            case "PENDING":   return .pending
+            switch statusValue {
+            case "PENDING": return .pending
             case "CONFIRMED": return .confirmed
-            case "CANCELLED": return .cancelled
             case "COMPLETED": return .completed
-            default:          return .pending
+            case "CANCELLED": return .cancelled
+            case "RESCHEDULED": return .pending
+            default: return .pending
             }
         }()
 
-        let clientName = client?.displayName ?? "Cliente"
-        let clientEmail = client?.email ?? ""
-        let amount = totalAmount ?? price ?? 0
+        let total = price ?? 0
 
         return Booking(
-            clientName: clientName,
-            clientEmail: clientEmail,
+            remoteId: id,
+            clientName: "Cliente",
+            clientEmail: "",
             clientPhone: "",
             scheduledDate: scheduledAt,
-            duration: durationMinutes ?? 60,
-            totalPrice: amount,
+            duration: duration ?? 60,
+            totalPrice: total,
             notes: notes ?? "",
             status: bookingStatus
         )
@@ -508,13 +499,13 @@ extension BookingDTO {
 
 extension ServiceDTO {
     func toDomainModel() -> Service {
-        Service(
+        return Service(
             name: name,
             description: description ?? "",
-            duration: duration,
-            price: price,
+            duration: durationMin ?? 60,
+            price: priceDecimal,
             category: category?.name ?? categoryId ?? "General",
-            isActive: active
+            isActive: status == "ACTIVE" || isAvailable == true
         )
     }
 }

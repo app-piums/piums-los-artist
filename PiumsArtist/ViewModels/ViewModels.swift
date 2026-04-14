@@ -50,13 +50,16 @@ final class DashboardViewModel: ObservableObject {
         errorMessage = nil
         
         do {
-            // ── Cargar bookings reales desde /bookings ──
+            let dashboard = try await apiService.get(
+                endpoint: .artistDashboard,
+                responseType: ArtistDashboardDTO.self
+            )
             let bookingsResp = try await apiService.get(
-                endpoint: .artistBookings(status: nil, page: 1),
-                responseType: BookingsResponseDTO.self
+                endpoint: .artistBookings(status: nil, page: 1, artistId: nil),
+                responseType: PaginatedResponseDTO<BookingDTO>.self
             )
             
-            let allBookings = bookingsResp.bookings.map { $0.toDomainModel() }
+            let allBookings = bookingsResp.data.map { $0.toDomainModel() }
             
             let today = Date()
             let calendar = Calendar.current
@@ -66,85 +69,54 @@ final class DashboardViewModel: ObservableObject {
             self.pendingBookings  = allBookings.filter { $0.status == .pending }
             self.completedBookings = allBookings.filter { $0.status == .completed }
             
-            // Calcular ingresos del mes desde bookings completados
-            let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: today))!
-            let monthlyCompleted = allBookings.filter {
-                $0.status == .completed && $0.scheduledDate >= startOfMonth
-            }
-            self.monthlyEarnings = monthlyCompleted.reduce(0) { $0 + $1.totalPrice }
+            self.monthlyEarnings = dashboard.revenue.thisMonth
+            self.totalEarnings = dashboard.revenue.total
             
-            // Total earnings (todos los completados)
-            self.totalEarnings = allBookings.filter { $0.status == .completed }
-                .reduce(0) { $0 + $1.totalPrice }
-            
-            // Stats globales
-            self.totalBookings   = bookingsResp.pagination.total
-            self.pendingCount    = allBookings.filter { $0.status == .pending }.count
-            self.confirmedCount  = allBookings.filter { $0.status == .confirmed }.count
+            self.totalBookings   = dashboard.bookings.total
+            self.pendingCount    = dashboard.bookings.pending
+            self.confirmedCount  = dashboard.bookings.confirmed
             
         } catch {
             self.errorMessage = error.localizedDescription
             loadMockData()
         }
-        
         isLoading = false
     }
-    
+
+    private func resolveArtistProfileId() async throws -> String? {
+        return nil
+    }
+
     private func loadMockData() {
-        // Mock data for dashboard
         let calendar = Calendar.current
         let today = Date()
-        
         todayBookings = [
-            Booking(
-                clientName: "María García",
-                clientEmail: "maria@email.com",
-                scheduledDate: calendar.date(byAdding: .hour, value: 2, to: today) ?? today,
-                duration: 60,
-                totalPrice: 45.0,
-                status: .confirmed
-            ),
-            Booking(
-                clientName: "Ana López",
-                clientEmail: "ana@email.com",
-                scheduledDate: calendar.date(byAdding: .hour, value: 5, to: today) ?? today,
-                duration: 90,
-                totalPrice: 65.0,
-                status: .pending
-            )
+            Booking(clientName: "María García", clientEmail: "maria@email.com", scheduledDate: today, duration: 60, totalPrice: 45, status: .confirmed),
+            Booking(clientName: "Ana López", clientEmail: "ana@email.com", scheduledDate: calendar.date(byAdding: .hour, value: 2, to: today) ?? today, duration: 90, totalPrice: 65, status: .pending)
         ]
-        
         pendingBookings = todayBookings.filter { $0.status == .pending }
-        completedBookings = Array(repeating: todayBookings[0], count: 8)
-        monthlyEarnings = 2450.0
+        completedBookings = []
+        monthlyEarnings = 0
+        totalEarnings = 0
+        totalBookings = 0
+        pendingCount = pendingBookings.count
+        confirmedCount = todayBookings.filter { $0.status == .confirmed }.count
     }
-    
-    var todayBookingsCount: Int {
-        todayBookings.count
-    }
-    
-    var pendingBookingsCount: Int {
-        pendingBookings.count
-    }
-    
-    var completedBookingsCount: Int {
-        completedBookings.count
-    }
-    
-    var formattedEarnings: String {
+
+    private var currencyFormatter: NumberFormatter {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-        formatter.currencySymbol = "$"
+        formatter.currencySymbol = "Q"
         formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: totalEarnings)) ?? "$\(Int(totalEarnings))"
+        return formatter
     }
-    
+
+    var formattedTotalEarnings: String {
+        currencyFormatter.string(from: NSNumber(value: totalEarnings)) ?? "Q\(Int(totalEarnings))"
+    }
+
     var formattedMonthlyEarnings: String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencySymbol = "$"
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: monthlyEarnings)) ?? "$\(Int(monthlyEarnings))"
+        currencyFormatter.string(from: NSNumber(value: monthlyEarnings)) ?? "Q\(Int(monthlyEarnings))"
     }
 }
 
@@ -191,13 +163,12 @@ final class BookingsViewModel: ObservableObject {
         errorMessage = nil
         
         do {
-            // Usar el endpoint real /bookings que devuelve {bookings:[], pagination:{}}
             let response = try await apiService.get(
-                endpoint: .artistBookings(status: nil, page: 1),
-                responseType: BookingsResponseDTO.self
+                endpoint: .artistBookings(status: nil, page: 1, artistId: nil),
+                responseType: PaginatedResponseDTO<BookingDTO>.self
             )
             
-            self.bookings = response.bookings.map { $0.toDomainModel() }
+            self.bookings = response.data.map { $0.toDomainModel() }
             applyFilter()
             
         } catch {
@@ -234,93 +205,78 @@ final class BookingsViewModel: ObservableObject {
     @MainActor
     private func updateBookingStatus(_ booking: Booking, status: String) async {
         do {
-            // Use specific artist endpoints for accepting/declining bookings
             let endpoint: APIEndpoint
+            let body: Encodable?
             
             switch status {
             case "CONFIRMED":
-                endpoint = .acceptBooking(booking.id.uuidString)
+                endpoint = .acceptBooking(booking.remoteId)
+                body = nil
             case "CANCELLED":
-                endpoint = .declineBooking(booking.id.uuidString)
+                endpoint = .declineBooking(booking.remoteId)
+                body = RejectBookingRequest(reason: "No disponibilidad en el horario solicitado", artistId: nil)
             default:
-                // For other statuses like completed, might need different approach
-                // For now, we'll skip as they may not have direct endpoints
                 return
             }
             
-            let _ = try await apiService.request(
-                endpoint: endpoint,
-                method: .POST,
-                responseType: SuccessResponseDTO.self
-            )
+            if let body = body {
+                let _ = try await apiService.request(
+                    endpoint: endpoint,
+                    method: .POST,
+                    body: try JSONEncoder().encode(AnyEncodable(body)),
+                    responseType: BookingDTO.self
+                )
+            } else {
+                let _ = try await apiService.request(
+                    endpoint: endpoint,
+                    method: .POST,
+                    responseType: BookingDTO.self
+                )
+            }
             
-            // Update local booking
             if let index = bookings.firstIndex(where: { $0.id == booking.id }) {
                 let newStatus: BookingStatus = {
                     switch status {
                     case "CONFIRMED": return .confirmed
                     case "CANCELLED": return .cancelled
                     case "COMPLETED": return .completed
-                    default: return .pending
+                    default: return booking.status
                     }
                 }()
                 
                 bookings[index].status = newStatus
-                bookings[index].updatedAt = Date()
+                applyFilter()
             }
             
-            applyFilter()
-            
         } catch {
-            self.errorMessage = error.localizedDescription
+            errorMessage = error.localizedDescription
         }
     }
-    
-    // Keep as fallback
-    private func loadMockData() {
-        let calendar = Calendar.current
-        let today = Date()
+
+    private func resolveArtistProfileId() async throws -> String? {
+        let email = AuthService.shared.currentArtist?.email ?? extractEmailFromToken(APIService.shared.authToken)
+        guard let email = email, !email.isEmpty else { return nil }
         
-        bookings = [
-            Booking(
-                clientName: "María García",
-                clientEmail: "maria.garcia@email.com",
-                clientPhone: "+34 666 111 222",
-                scheduledDate: today,
-                duration: 60,
-                totalPrice: 45.0,
-                notes: "Corte y peinado para evento",
-                status: .confirmed
-            ),
-            Booking(
-                clientName: "Ana López",
-                clientEmail: "ana.lopez@email.com",
-                scheduledDate: calendar.date(byAdding: .hour, value: 2, to: today) ?? today,
-                duration: 120,
-                totalPrice: 80.0,
-                status: .pending
-            ),
-            Booking(
-                clientName: "Carlos Ruiz",
-                clientEmail: "carlos.ruiz@email.com",
-                scheduledDate: calendar.date(byAdding: .hour, value: 4, to: today) ?? today,
-                duration: 30,
-                totalPrice: 25.0,
-                status: .confirmed
-            ),
-            Booking(
-                clientName: "Laura Martín",
-                clientEmail: "laura.martin@email.com",
-                scheduledDate: calendar.date(byAdding: .day, value: -1, to: today) ?? today,
-                duration: 90,
-                totalPrice: 65.0,
-                status: .completed
-            )
-        ]
-        
-        applyFilter()
+        let artistsResp = try await apiService.get(
+            endpoint: .artists(page: 1, limit: 50, category: nil, location: nil),
+            responseType: ArtistsSearchResponseDTO.self
+        )
+        return artistsResp.artists.first { $0.email?.lowercased() == email.lowercased() }?.id
     }
-    
+
+    private func extractEmailFromToken(_ token: String?) -> String? {
+        guard let token = token else { return nil }
+        let parts = token.split(separator: ".")
+        guard parts.count == 3 else { return nil }
+        var b64 = String(parts[1])
+        let rem = b64.count % 4
+        if rem > 0 { b64 += String(repeating: "=", count: 4 - rem) }
+        b64 = b64.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        guard let data = Data(base64Encoded: b64),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return json["email"] as? String
+    }
+
     private func applyFilter() {
         switch selectedFilter {
         case .all:
@@ -334,6 +290,16 @@ final class BookingsViewModel: ObservableObject {
         case .cancelled:
             filteredBookings = bookings.filter { $0.status == .cancelled }
         }
+    }
+
+    private func loadMockData() {
+        let calendar = Calendar.current
+        let today = Date()
+        bookings = [
+            Booking(clientName: "María García", clientEmail: "maria@email.com", scheduledDate: today, duration: 60, totalPrice: 45, status: .confirmed),
+            Booking(clientName: "Ana López", clientEmail: "ana@email.com", scheduledDate: calendar.date(byAdding: .hour, value: 2, to: today) ?? today, duration: 90, totalPrice: 65, status: .pending)
+        ]
+        applyFilter()
     }
 }
 
@@ -618,34 +584,24 @@ final class ProfileViewModel: ObservableObject {
         errorMessage = nil
         
         do {
-            // Obtener ID del artista autenticado desde el token JWT
-            guard let token = APIService.shared.authToken,
-                  let artistId = extractUserIdFromToken(token) else {
-                loadMockData()
-                isLoading = false
-                return
-            }
+            let artistId = try await resolveArtistProfileId()
             
-            // Cargar perfil del artista desde /search/artists?
-            // y sus servicios desde /catalog/services?artistId=
             async let servicesTask = apiService.get(
                 endpoint: .catalogServices(artistId: artistId, category: nil),
-                responseType: ServicesResponseDTO.self
+                responseType: [ServiceDTO].self
             )
             async let bookingsTask = apiService.get(
-                endpoint: .artistBookings(status: nil, page: 1),
-                responseType: BookingsResponseDTO.self
+                endpoint: .artistBookings(status: nil, page: 1, artistId: nil),
+                responseType: PaginatedResponseDTO<BookingDTO>.self
             )
             
             let (servicesResp, bookingsResp) = try await (servicesTask, bookingsTask)
             
-            self.services = servicesResp.services.map { $0.toDomainModel() }
+            self.services = servicesResp.map { $0.toDomainModel() }
+
+            let completed = bookingsResp.data.filter { ($0.status ?? "").uppercased() == "COMPLETED" }
+            let earnings = completed.compactMap { $0.price }.reduce(0, +)
             
-            // Calcular estadísticas desde bookings reales
-            let completed = bookingsResp.bookings.filter { ($0.status ?? "").uppercased() == "COMPLETED" }
-            let earnings = completed.compactMap { $0.totalAmount ?? $0.price }.reduce(0, +)
-            
-            // Usar datos del AuthService si disponibles
             let authArtist = AuthService.shared.currentArtist
             self.artist = authArtist ?? Artist.preview
             
@@ -663,9 +619,19 @@ final class ProfileViewModel: ObservableObject {
         
         isLoading = false
     }
-    
-    /// Extrae el user id del payload JWT sin verificar firma
-    private func extractUserIdFromToken(_ token: String) -> String? {
+
+    private func resolveArtistProfileId() async throws -> String? {
+        let email = AuthService.shared.currentArtist?.email ?? extractEmailFromToken(APIService.shared.authToken)
+        guard let email = email, !email.isEmpty else { return nil }
+        let artistsResp = try await apiService.get(
+            endpoint: .artists(page: 1, limit: 50, category: nil, location: nil),
+            responseType: ArtistsSearchResponseDTO.self
+        )
+        return artistsResp.artists.first { $0.email?.lowercased() == email.lowercased() }?.id
+    }
+
+    private func extractEmailFromToken(_ token: String?) -> String? {
+        guard let token = token else { return nil }
         let parts = token.split(separator: ".")
         guard parts.count == 3 else { return nil }
         var b64 = String(parts[1])
@@ -674,47 +640,35 @@ final class ProfileViewModel: ObservableObject {
         b64 = b64.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
         guard let data = Data(base64Encoded: b64),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-        return json["id"] as? String
+        return json["email"] as? String
     }
-    
-    func updateProfile(_ updatedArtist: Artist) {
-        Task {
-            await saveProfile(updatedArtist)
-        }
-    }
-    
-    @MainActor
-    private func saveProfile(_ updatedArtist: Artist) async {
-        do {
-            let request = UpdateUserRequest(
-                name: updatedArtist.name,
-                phone: updatedArtist.phone,
-                bio: updatedArtist.bio,
-                location: nil // Can add location support later
-            )
-            
-            let response = try await apiService.put(
-                endpoint: .updateUserProfile,
-                body: request,
-                responseType: UserDTO.self
-            )
-            
-            self.artist = response.toDomainModel()
-            
-        } catch {
-            self.errorMessage = error.localizedDescription
-        }
-    }
-    
-    // Keep as fallback
+
     private func loadMockData() {
         artist = Artist.preview
         services = Service.previewServices
         statistics = ProfileStatistics(
-            totalClients: 1234,
-            completedServices: 2156,
-            monthlyEarnings: 3250.0,
-            averageRating: 4.8
+            totalClients: 0,
+            completedServices: 0,
+            monthlyEarnings: 0,
+            averageRating: artist?.rating ?? 0
         )
     }
+}
+
+// MARK: - AnyEncodable helper
+struct AnyEncodable: Encodable {
+    private let encodeFunc: (Encoder) throws -> Void
+    init<T: Encodable>(_ value: T) { self.encodeFunc = value.encode }
+    func encode(to encoder: Encoder) throws { try encodeFunc(encoder) }
+}
+
+// MARK: - Booking action DTOs
+struct ConfirmBookingRequest: Codable {
+    let artistNotes: String?
+    let artistId: String?
+}
+
+struct RejectBookingRequest: Codable {
+    let reason: String
+    let artistId: String?
 }

@@ -132,7 +132,7 @@ struct DashboardView: View {
                             .clipShape(Circle())
                             .shadow(color: .black.opacity(0.06), radius: 4, y: 2)
 
-                        if viewModel.pendingBookingsCount > 0 {
+                        if viewModel.pendingCount > 0 {
                             Circle().fill(Color.piumsError)
                                 .frame(width: 9, height: 9)
                                 .offset(x: 2, y: -2)
@@ -170,7 +170,7 @@ struct DashboardView: View {
                 .foregroundColor(.piumsTextSecondary)
                 .tracking(0.6)
 
-            Text(viewModel.totalEarnings > 0 ? viewModel.formattedEarnings : "$0")
+            Text(viewModel.totalEarnings > 0 ? viewModel.formattedTotalEarnings : "Q0")
                 .font(.system(size: 38, weight: .bold))
                 .foregroundColor(.piumsOrange)
 
@@ -416,7 +416,7 @@ struct BookingRowCard: View {
                 Text(booking.clientName)
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(.piumsTextPrimary)
-                Text("$\(Int(booking.totalPrice))")
+                Text("Q\(Int(booking.totalPrice))")
                     .font(.caption.weight(.medium))
                     .foregroundColor(.piumsSuccess)
             }

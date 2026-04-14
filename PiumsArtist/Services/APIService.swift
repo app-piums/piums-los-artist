@@ -54,7 +54,7 @@ enum APIEndpoint {
     case updateArtist(String)
     case deleteArtist(String)
     case artistDashboard
-    case artistBookings(status: String? = nil, page: Int? = nil)
+    case artistBookings(status: String? = nil, page: Int? = nil, artistId: String? = nil)
     case acceptBooking(String)
     case declineBooking(String)
     
@@ -174,21 +174,18 @@ enum APIEndpoint {
         case .deleteArtist(let id):
             return "/search/artists/\(id)"
         case .artistDashboard:
-            // No existe endpoint de dashboard — se construye desde /bookings + /catalog/services
-            return "/bookings"
-        case .artistBookings(let status, let page):
-            // El backend usa /bookings (devuelve las del artista autenticado)
-            // El filtro es "statuses=STATUS" en mayúsculas
-            var path = "/bookings"
+            return "/artists/me/dashboard"
+        case .artistBookings(let status, let page, _):
+            var path = "/artists/me/bookings"
             var params: [String] = []
-            if let status = status { params.append("statuses=\(status.uppercased())") }
+            if let status = status { params.append("status=\(status.uppercased())") }
             if let page = page { params.append("page=\(page)") }
             if !params.isEmpty { path += "?" + params.joined(separator: "&") }
             return path
         case .acceptBooking(let id):
-            return "/bookings/\(id)/confirm"
+            return "/artists/bookings/\(id)/accept"
         case .declineBooking(let id):
-            return "/bookings/\(id)/cancel"
+            return "/artists/bookings/\(id)/decline"
             
         // Catalog
         case .catalogServices(let artistId, let category):
@@ -213,7 +210,7 @@ enum APIEndpoint {
         case .bookings(let status, let page):
             var path = "/bookings"
             var params: [String] = []
-            if let status = status { params.append("status=\(status)") }
+            if let status = status { params.append("status=\(status.uppercased())") }
             if let page = page { params.append("page=\(page)") }
             if !params.isEmpty { path += "?" + params.joined(separator: "&") }
             return path
