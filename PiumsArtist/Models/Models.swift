@@ -95,6 +95,7 @@ final class Service {
     var price: Double
     var isActive: Bool
     var category: String
+    var pricingType: String
     var createdAt: Date
     var updatedAt: Date
     
@@ -104,7 +105,8 @@ final class Service {
         duration: Int,
         price: Double,
         category: String = "General",
-        isActive: Bool = true
+        isActive: Bool = true,
+        pricingType: String = "FIXED"
     ) {
         self.id = UUID()
         self.name = name
@@ -112,6 +114,7 @@ final class Service {
         self.duration = duration
         self.price = price
         self.category = category
+        self.pricingType = pricingType
         self.isActive = isActive
         self.createdAt = Date()
         self.updatedAt = Date()

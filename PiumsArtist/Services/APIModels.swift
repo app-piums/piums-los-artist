@@ -599,7 +599,8 @@ extension ServiceDTO {
             duration: durationMin ?? 60,
             price: priceDecimal,
             category: category?.name ?? categoryId ?? "General",
-            isActive: status == "ACTIVE" || isAvailable == true
+            isActive: status == "ACTIVE" || isAvailable == true,
+            pricingType: pricingType ?? "FIXED"
         )
     }
 }
