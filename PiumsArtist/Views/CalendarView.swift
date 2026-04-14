@@ -52,6 +52,7 @@ struct CalendarView: View {
         }
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .onAppear { viewModel.refreshData() }
+        .onChange(of: selectedDate) { _, date in viewModel.updateSelectedDate(date) }
         .sheet(isPresented: $showBlockSheet) { blockSheet }
         .sheet(isPresented: $showScheduleSheet) { scheduleSheet }
     }
@@ -337,8 +338,8 @@ struct CalendarView: View {
 
     // MARK: - Helpers
     private var slotsForDay: [CalendarViewModel.TimeSlot] {
-        viewModel.updateSelectedDate(selectedDate)
-        return viewModel.selectedDateTimeSlots
+        let dayStart = Calendar.current.startOfDay(for: selectedDate)
+        return viewModel.availability[dayStart] ?? []
     }
 
     private var monthYearString: String {
