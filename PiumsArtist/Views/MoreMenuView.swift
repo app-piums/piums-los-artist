@@ -12,6 +12,7 @@ import SwiftUI
 struct MoreMenuView: View {
     @State private var showProfile = false
     @State private var showServices = false
+    @State private var showAbsences = false
     @State private var showSettings = false
     @State private var showLogoutAlert = false
 
@@ -29,7 +30,7 @@ struct MoreMenuView: View {
                     menuGroup {
                         menuRow(icon: "bag.fill", title: "Servicios", color: .piumsOrange, badge: nil) { showServices = true }
                         menuDivider()
-                        menuRow(icon: "airplane", title: "Ausencias / Viajes", color: .purple) {}
+                        menuRow(icon: "airplane", title: "Ausencias / Viajes", color: .purple) { showAbsences = true }
                         menuDivider()
                         menuRow(icon: "sparkles", title: "Tutorial", color: .piumsAccent) {}
                     }
@@ -60,6 +61,7 @@ struct MoreMenuView: View {
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showProfile) { ProfileView() }
             .sheet(isPresented: $showServices) { NavigationView { ServicesView() }.presentationDetents([.large]) }
+            .sheet(isPresented: $showAbsences) { NavigationView { AbsencesView() }.presentationDetents([.large]) }
             .sheet(isPresented: $showSettings) { SettingsView() }
             .alert("¿Cerrar sesión?", isPresented: $showLogoutAlert) {
                 Button("Cancelar", role: .cancel) {}

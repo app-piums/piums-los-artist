@@ -61,6 +61,11 @@ enum APIEndpoint {
     case completeBooking(String)
     case artistCancelBooking(String)
     
+    // Absences
+    case artistAbsences
+    case createAbsence
+    case deleteAbsence(String)
+    
     // Catalog
     case catalogServices(artistId: String? = nil, category: String? = nil)
     case createService
@@ -195,6 +200,14 @@ enum APIEndpoint {
             return "/artists/dashboard/me/bookings/\(id)/complete"
         case .artistCancelBooking(let id):
             return "/artists/dashboard/me/bookings/\(id)/cancel"
+            
+        // Absences
+        case .artistAbsences:
+            return "/artists/dashboard/me/absences"
+        case .createAbsence:
+            return "/artists/dashboard/me/absences"
+        case .deleteAbsence(let id):
+            return "/artists/dashboard/me/absences/\(id)"
             
         // Catalog
         case .catalogServices(let artistId, let category):
