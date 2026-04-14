@@ -10,7 +10,6 @@ struct DashboardView: View {
     @StateObject private var viewModel = DashboardViewModel()
     @Environment(\.modelContext) private var modelContext
     @State private var showingNotifications = false
-    @State private var showingBackendTest = false
     @State private var animateStats = false
 
     private static let dateFormatter: DateFormatter = {
@@ -77,9 +76,6 @@ struct DashboardView: View {
             }
         }
         .sheet(isPresented: $showingNotifications) { NotificationsSheet() }
-        .sheet(isPresented: $showingBackendTest) {
-            BackendTestView().presentationDetents([.large])
-        }
     }
 
     // MARK: - Header
@@ -108,20 +104,8 @@ struct DashboardView: View {
 
             Spacer()
 
-            // Settings / debug
+            // Settings
             HStack(spacing: 10) {
-                #if DEBUG
-                Button { showingBackendTest = true } label: {
-                    Image(systemName: "link")
-                        .font(.callout.weight(.medium))
-                        .foregroundColor(.piumsTextSecondary)
-                        .frame(width: 38, height: 38)
-                        .background(Color(.systemBackground))
-                        .clipShape(Circle())
-                        .shadow(color: .black.opacity(0.06), radius: 4, y: 2)
-                }
-                #endif
-
                 Button { showingNotifications = true } label: {
                     ZStack(alignment: .topTrailing) {
                         Image(systemName: "gearshape.fill")
