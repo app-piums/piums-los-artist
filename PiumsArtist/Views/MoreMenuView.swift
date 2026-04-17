@@ -13,6 +13,7 @@ struct MoreMenuView: View {
     @State private var showLogoutAlert = false
     @State private var showReviews = false
     @State private var showDisputas = false
+    @State private var showTutorial = false
     @State private var showComingSoon = false
     @State private var comingSoonTitle = ""
 
@@ -63,7 +64,7 @@ struct MoreMenuView: View {
                     Button { showAbsences = true } label: {
                         Label("Ausencias / Viajes", systemImage: "airplane.departure")
                     }
-                    Button { comingSoonTitle = "Tutorial"; showComingSoon = true } label: {
+                    Button { showTutorial = true } label: {
                         Label("Tutorial", systemImage: "sparkles")
                     }
                 }
@@ -122,6 +123,7 @@ struct MoreMenuView: View {
             .sheet(isPresented: $showAbsences) { NavigationView { AbsencesView() }.presentationDetents([.large]) }
             .sheet(isPresented: $showReviews) { NavigationView { ReviewsView() }.presentationDetents([.large]) }
             .sheet(isPresented: $showDisputas) { DisputasView().presentationDetents([.large]) }
+            .sheet(isPresented: $showTutorial) { TutorialView().presentationDetents([.large]) }
             .sheet(isPresented: $showSettings) {
                 SettingsView().environmentObject(ThemeManager.shared)
             }
