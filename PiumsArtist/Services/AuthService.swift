@@ -94,6 +94,34 @@ final class AuthService: ObservableObject {
         isLoading = false
     }
     
+    func register(name: String, email: String, password: String) async {
+        isLoading = true
+        errorMessage = nil
+        do {
+            let request = RegisterRequest(name: name, email: email, password: password)
+            let response = try await apiService.post(
+                endpoint: .register,
+                body: request,
+                responseType: AuthResponse.self
+            )
+            apiService.authToken = response.token
+            if let refreshToken = response.refreshToken {
+                UserDefaults.standard.set(refreshToken, forKey: "refresh_token")
+            }
+            currentArtist = response.user.toDomainModel()
+            let expiresInSeconds = parseExpiresIn(response.expiresIn ?? "15m")
+            scheduleTokenRefresh(expiresIn: expiresInSeconds)
+            await checkVerificationStatus()
+        } catch {
+            if let apiError = error as? APIError {
+                errorMessage = apiError.errorDescription
+            } else {
+                errorMessage = error.localizedDescription
+            }
+        }
+        isLoading = false
+    }
+
     func logout() {
         Task {
             // Call logout endpoint
@@ -350,6 +378,7 @@ struct LoginView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var showPassword = false
+    @State private var showRegister = false
     @State private var animateIn = false
     @State private var glowPulse = false
 
@@ -380,6 +409,7 @@ struct LoginView: View {
         } message: {
             Text(authService.errorMessage ?? "")
         }
+        .fullScreenCover(isPresented: $showRegister) { RegisterView() }
     }
 
     // MARK: - Background
@@ -496,6 +526,17 @@ struct LoginView: View {
 
                     // Botón login
                     loginButton
+
+                    // Registro
+                    HStack(spacing: 4) {
+                        Text("¿No tienes cuenta?")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.piumsLabelSecondary)
+                        Button("Regístrate") { showRegister = true }
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Color.piumsOrange)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
 
                     // Divisor
                     HStack(spacing: 12) {
