@@ -2,10 +2,6 @@
 //  MoreMenuView.swift
 //  PiumsArtist
 //
-//  Equivalente al sidebar completo de la web.
-//  Agrupa: Servicios, Ausencias/Viajes, Tutorial,
-//  Billetera, Facturas, Quejas, Configuración, Perfil, Cerrar Sesión.
-//
 
 import SwiftUI
 
@@ -15,57 +11,98 @@ struct MoreMenuView: View {
     @State private var showAbsences = false
     @State private var showSettings = false
     @State private var showLogoutAlert = false
+    @State private var showReviews = false
+    @State private var showDisputas = false
 
     var body: some View {
         NavigationView {
-            ScrollView {
-                VStack(spacing: 0) {
-                    // ── Profile card ──
-                    profileCard
-                        .padding(.horizontal, 16)
-                        .padding(.top, 12)
+            List {
+                // ── Profile ──
+                Section {
+                    Button { showProfile = true } label: {
 
-                    // ── MAIN ──
-                    sectionHeader("MAIN")
-                    menuGroup {
-                        menuRow(icon: "bag.fill", title: "Servicios", color: .piumsOrange, badge: nil) { showServices = true }
-                        menuDivider()
-                        menuRow(icon: "airplane", title: "Ausencias / Viajes", color: .purple) { showAbsences = true }
-                        menuDivider()
-                        menuRow(icon: "sparkles", title: "Tutorial", color: .piumsAccent) {}
+                        HStack(spacing: 14) {
+                            PiumsAvatarView(
+                                name: AuthService.shared.currentArtist?.name ?? "A",
+                                imageURL: nil,
+                                size: 50,
+                                gradientColors: [.piumsOrange, .piumsAccent]
+                            )
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(AuthService.shared.currentArtist?.name ?? "Artista")
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                                Text(AuthService.shared.currentArtist?.email ?? "Artista Pro")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                Text("Artista Pro")
+                                    .font(.caption)
+                                    .padding(.horizontal, 8).padding(.vertical, 3)
+                                    .background(Color.piumsOrange.opacity(0.12))
+                                    .foregroundColor(.piumsOrange)
+                                    .clipShape(Capsule())
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.vertical, 6)
                     }
-
-                    // ── FINANCE ──
-                    sectionHeader("FINANCE")
-                    menuGroup {
-                        menuRow(icon: "wallet.pass.fill", title: "Billetera", color: .piumsSuccess) {}
-                        menuDivider()
-                        menuRow(icon: "doc.text.fill", title: "Facturas", color: .secondary) {}
-                    }
-
-                    // ── CUENTA ──
-                    sectionHeader("CUENTA")
-                    menuGroup {
-                        menuRow(icon: "exclamationmark.triangle.fill", title: "Quejas", color: .piumsWarning) {}
-                        menuDivider()
-                        menuRow(icon: "gearshape.fill", title: "Configuración", color: .secondary) { showSettings = true }
-                        menuDivider()
-                        menuRow(icon: "rectangle.portrait.and.arrow.right", title: "Cerrar Sesión", color: .piumsError) { showLogoutAlert = true }
-                    }
-
-                    Spacer(minLength: 120)
+                    .buttonStyle(.plain)
                 }
+                .listRowBackground(Color(.tertiarySystemGroupedBackground))
+
+                // ── MAIN ──
+                Section("Main") {
+                    menuRow(icon: "bag.fill", title: "Servicios", color: .piumsOrange) { showServices = true }
+                    menuRow(icon: "airplane.departure", title: "Ausencias / Viajes", color: .purple) { showAbsences = true }
+                    menuRow(icon: "sparkles", title: "Tutorial", color: .piumsAccent) {}
+                }
+                .listRowBackground(Color(.tertiarySystemGroupedBackground))
+
+                // ── FINANCE ──
+                Section("Finance") {
+                    menuRow(icon: "wallet.pass.fill", title: "Billetera", color: .piumsSuccess) {}
+                    menuRow(icon: "doc.text.fill", title: "Facturas", color: Color(.systemIndigo)) {}
+                }
+                .listRowBackground(Color(.tertiarySystemGroupedBackground))
+
+                // ── CUENTA ──
+                Section("Cuenta") {
+                    menuRow(icon: "star.fill", title: "Reseñas", color: .yellow) { showReviews = true }
+                    menuRow(icon: "exclamationmark.triangle.fill", title: "Quejas", color: .piumsWarning) { showDisputas = true }
+                    menuRow(icon: "gearshape.fill", title: "Configuración", color: Color(.systemGray)) { showSettings = true }
+                }
+                .listRowBackground(Color(.tertiarySystemGroupedBackground))
+
+                // ── CERRAR SESIÓN ──
+                Section {
+                    Button(role: .destructive) { showLogoutAlert = true } label: {
+                        HStack {
+                            Spacer()
+                            Text("Cerrar Sesión")
+                                .font(.subheadline.weight(.medium))
+                            Spacer()
+                        }
+                    }
+                }
+                .listRowBackground(Color(.tertiarySystemGroupedBackground))
             }
-            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(Color(.secondarySystemGroupedBackground).ignoresSafeArea())
             .navigationTitle("Más")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color(.secondarySystemGroupedBackground), for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .sheet(isPresented: $showProfile) { ProfileView() }
             .sheet(isPresented: $showServices) { NavigationView { ServicesView() }.presentationDetents([.large]) }
             .sheet(isPresented: $showAbsences) { NavigationView { AbsencesView() }.presentationDetents([.large]) }
-            .sheet(isPresented: $showAbsences) { NavigationView { AbsencesView() }.presentationDetents([.large]) }
+            .sheet(isPresented: $showReviews) { NavigationView { ReviewsView() }.presentationDetents([.large]) }
+            .sheet(isPresented: $showDisputas) { DisputasView().presentationDetents([.large]) }
             .sheet(isPresented: $showSettings) {
-                SettingsView()
-                    .environmentObject(ThemeManager.shared)
+                SettingsView().environmentObject(ThemeManager.shared)
             }
             .alert("¿Cerrar sesión?", isPresented: $showLogoutAlert) {
                 Button("Cancelar", role: .cancel) {}
@@ -78,104 +115,24 @@ struct MoreMenuView: View {
         }
     }
 
-    // MARK: - Profile Card
-    private var profileCard: some View {
-        Button { showProfile = true } label: {
-            HStack(spacing: 14) {
-                PiumsAvatarView(
-                    name: AuthService.shared.currentArtist?.name ?? "A",
-                    imageURL: nil,
-                    size: 50,
-                    gradientColors: [.piumsOrange, .piumsAccent]
-                )
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(AuthService.shared.currentArtist?.name ?? "Artista")
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                    Text("Artista Pro")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            .padding(16)
-            .background(Color(.systemBackground))
-            .cornerRadius(14)
-            .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Section Header
-    private func sectionHeader(_ title: String) -> some View {
-        HStack {
-            Text(title)
-                .font(.caption.weight(.bold))
-                .foregroundColor(.secondary)
-            Spacer()
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 24)
-        .padding(.bottom, 8)
-    }
-
-    // MARK: - Menu Group
-    private func menuGroup<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        VStack(spacing: 0) {
-            content()
-        }
-        .background(Color(.systemBackground))
-        .cornerRadius(14)
-        .shadow(color: .black.opacity(0.03), radius: 4, y: 1)
-        .padding(.horizontal, 16)
-    }
-
     // MARK: - Menu Row
-    private func menuRow(icon: String, title: String, color: Color, badge: Int? = nil, action: @escaping () -> Void) -> some View {
+    private func menuRow(icon: String, title: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 14) {
-                Image(systemName: icon)
-                    .font(.body)
-                    .foregroundColor(color)
-                    .frame(width: 28, height: 28)
-
+            Label {
                 Text(title)
-                    .font(.subheadline)
-                    .foregroundColor(title == "Cerrar Sesión" ? .piumsError : .primary)
-
-                Spacer()
-
-                if let badge = badge, badge > 0 {
-                    Text("\(badge)")
-                        .font(.caption2.weight(.bold))
+                    .foregroundColor(.primary)
+            } icon: {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(color)
+                        .frame(width: 28, height: 28)
+                    Image(systemName: icon)
+                        .font(.system(size: 13, weight: .medium))
                         .foregroundColor(.white)
-                        .frame(width: 22, height: 22)
-                        .background(Color.piumsOrange)
-                        .clipShape(Circle())
-                }
-
-                if title != "Cerrar Sesión" {
-                    Image(systemName: "chevron.right")
-                        .font(.caption2)
-                        .foregroundColor(Color(.tertiaryLabel))
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 13)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Divider
-    private func menuDivider() -> some View {
-        Divider().padding(.leading, 58)
+        .foregroundColor(.primary)
     }
 }
 

@@ -2,124 +2,278 @@
 //  ProfileView.swift
 //  PiumsArtist
 //
-//  Created by piums on 13/04/26.
+//  Conectado a ProfileViewModel — muestra datos reales del backend.
 //
 
 import SwiftUI
 
+// MARK: - Profile View
+
 struct ProfileView: View {
+    @StateObject private var vm = ProfileViewModel()
+    @StateObject private var authService = AuthService.shared
     @State private var showingSettings = false
-    @State private var showingEditProfile = false
-    
-    // Mock artist data
-    @State private var artist = ArtistData(
-        name: "María González",
-        profession: "Estilista Profesional",
-        rating: 4.8,
-        totalReviews: 156,
-        yearsOfExperience: 5,
-        specialty: "Coloración y Peinados",
-        phone: "+34 666 777 888",
-        email: "maria.gonzalez@piums.com",
-        bio: "Especialista en coloración y peinados con más de 5 años de experiencia. Me apasiona crear looks únicos para cada cliente."
-    )
-    
+    @State private var showVerificacion = false
+
+    private var artist: Artist? { vm.artist ?? AuthService.shared.currentArtist }
+
     var body: some View {
         NavigationView {
             ScrollView {
-                VStack(spacing: 24) {
-                    // Profile Header
-                    VStack(spacing: 16) {
-                        // Avatar
-                        Circle()
-                            .fill(Color.blue.opacity(0.2))
-                            .frame(width: 100, height: 100)
-                            .overlay(
-                                Image(systemName: "person.fill")
-                                    .font(.system(size: 45))
-                                    .foregroundColor(.blue)
-                            )
-                            .overlay(
-                                Button {
-                                    // Change avatar action
-                                } label: {
-                                    Image(systemName: "camera.fill")
-                                        .font(.caption)
-                                        .foregroundColor(.white)
-                                        .frame(width: 28, height: 28)
-                                        .background(Color.blue)
-                                        .cornerRadius(14)
-                                }
-                                .offset(x: 35, y: 35)
-                            )
-                        
-                        VStack(spacing: 8) {
-                            Text(artist.name)
-                                .font(.title2)
-                                .fontWeight(.bold)
-                            
-                            Text(artist.profession)
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                            
-                            HStack(spacing: 16) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "star.fill")
-                                        .foregroundColor(.yellow)
-                                    Text("\(artist.rating, specifier: "%.1f")")
-                                        .fontWeight(.medium)
-                                    Text("(\(artist.totalReviews) reseñas)")
-                                        .foregroundColor(.secondary)
-                                }
-                                .font(.subheadline)
-                                
-                                Text("•")
-                                    .foregroundColor(.secondary)
-                                
-                                Text("\(artist.yearsOfExperience) años exp.")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        
-                        Button("Editar Perfil") {
-                            showingEditProfile = true
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(Color.blue)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
-                        .padding(.horizontal, 40)
-                    }
-                    .padding()
-                    .background(Color(.systemBackground))
-                    .cornerRadius(16)
-                    .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 5)
-                    
-                    // Stats Section
-                    StatsSection()
-                    
-                    // Services Section
-                    ServicesSection()
-                    
-                    // Settings Section
-                    SettingsSection(showingSettings: $showingSettings)
+                VStack(spacing: 20) {
+                    profileHeader
+                    statsSection
+                    servicesSection
+                    settingsSection
                 }
-                .padding()
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 120)
             }
+            .background(Color(.secondarySystemGroupedBackground).ignoresSafeArea())
             .navigationTitle("Perfil")
             .navigationBarTitleDisplayMode(.large)
-            .sheet(isPresented: $showingEditProfile) {
-                EditProfileView(artist: $artist)
-            }
+            .toolbarBackground(Color(.secondarySystemGroupedBackground), for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .refreshable { await vm.refreshData() }
             .sheet(isPresented: $showingSettings) {
-                SettingsView()
-                    .environmentObject(ThemeManager.shared)
+                SettingsView().environmentObject(ThemeManager.shared)
+            }
+            .sheet(isPresented: $showVerificacion) {
+                VerificacionView(onComplete: {
+                    authService.needsVerification = false
+                })
+            }
+            .overlay {
+                if vm.isLoading && vm.artist == nil {
+                    PiumsLoadingView("Cargando perfil...")
+                }
             }
         }
     }
+
+    // MARK: - Header
+
+    private var profileHeader: some View {
+        VStack(spacing: 16) {
+            PiumsAvatarView(
+                name: artist?.name ?? "A",
+                imageURL: nil,
+                size: 90,
+                gradientColors: [.piumsOrange, .piumsAccent]
+            )
+            .overlay(alignment: .bottomTrailing) {
+                Button { } label: {
+                    Image(systemName: "camera.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 28, height: 28)
+                        .background(Color.piumsOrange)
+                        .clipShape(Circle())
+                }
+                .offset(x: 4, y: 4)
+            }
+
+            VStack(spacing: 6) {
+                HStack(spacing: 6) {
+                    Text(artist?.name ?? "—")
+                        .font(.title2.weight(.bold))
+                    if artist?.isVerified == true {
+                        Image(systemName: "checkmark.seal.fill")
+                            .foregroundColor(.piumsOrange)
+                    }
+                }
+
+                Text(artist?.profession.isEmpty == false ? artist!.profession : "Artista")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+
+                let rating = artist?.rating ?? 0
+                if rating > 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "star.fill").foregroundColor(.yellow)
+                        Text(String(format: "%.1f", rating)).fontWeight(.medium)
+                        Text("(\(artist?.totalReviews ?? 0) reseñas)").foregroundColor(.secondary)
+                    }
+                    .font(.subheadline)
+                }
+            }
+
+            Button { showingSettings = true } label: {
+                Label("Editar Perfil", systemImage: "pencil")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.piumsOrange)
+                    .cornerRadius(12)
+                    .padding(.horizontal, 32)
+            }
+        }
+        .padding(20)
+        .background(Color(.tertiarySystemGroupedBackground))
+        .cornerRadius(16)
+        .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+    }
+
+    // MARK: - Stats
+
+    private var statsSection: some View {
+        let s = vm.statistics
+        return VStack(alignment: .leading, spacing: 14) {
+            Text("Estadísticas")
+                .font(.headline.weight(.semibold))
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                statCard("Reservas totales",   value: "\(s.totalClients)",
+                         icon: "person.2.fill",         color: .piumsOrange)
+                statCard("Completados",        value: "\(s.completedServices)",
+                         icon: "checkmark.circle.fill", color: .piumsSuccess)
+                statCard("Ingresos mes",       value: "Q\(Int(s.monthlyEarnings))",
+                         icon: "dollarsign.circle.fill", color: .purple)
+                statCard("Valoración",         value: s.averageRating > 0
+                            ? String(format: "%.1f ⭐", s.averageRating) : "—",
+                         icon: "star.fill",             color: .yellow)
+            }
+        }
+        .padding(16)
+        .background(Color(.tertiarySystemGroupedBackground))
+        .cornerRadius(16)
+        .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+    }
+
+    private func statCard(_ title: String, value: String, icon: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: icon).foregroundColor(color).font(.title3)
+            Text(value).font(.title3.weight(.bold))
+            Text(title).font(.caption).foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(color.opacity(0.08))
+        .cornerRadius(12)
+    }
+
+    // MARK: - Services
+
+    private var servicesSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Mis Servicios")
+                .font(.headline.weight(.semibold))
+
+            if vm.services.isEmpty {
+                Text("Sin servicios configurados")
+                    .font(.subheadline).foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 8)
+            } else {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    ForEach(vm.services.prefix(6)) { svc in
+                        Text(svc.name)
+                            .font(.subheadline.weight(.medium))
+                            .lineLimit(1)
+                            .padding(.horizontal, 12).padding(.vertical, 8)
+                            .frame(maxWidth: .infinity)
+                            .background(Color.piumsOrange.opacity(0.1))
+                            .foregroundColor(.piumsOrange)
+                            .cornerRadius(20)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .background(Color(.tertiarySystemGroupedBackground))
+        .cornerRadius(16)
+        .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+    }
+
+    // MARK: - Settings
+
+    private var settingsSection: some View {
+        VStack(spacing: 0) {
+            settingsRow(icon: "gearshape.fill",   label: "Configuración",   color: Color(.systemGray)) { showingSettings = true }
+            Divider().padding(.leading, 58)
+            // Fila de verificación con badge si aún no está enviada
+            verificationRow
+            Divider().padding(.leading, 58)
+            settingsRow(icon: "bell.fill",         label: "Notificaciones",  color: .piumsInfo) {}
+            Divider().padding(.leading, 58)
+            settingsRow(icon: "hand.raised.fill",  label: "Privacidad",      color: .piumsSuccess) {}
+            Divider().padding(.leading, 58)
+            settingsRow(icon: "questionmark.circle.fill", label: "Ayuda y Soporte", color: .piumsWarning) {}
+            Divider().padding(.leading, 58)
+            settingsRow(icon: "rectangle.portrait.and.arrow.right.fill",
+                        label: "Cerrar Sesión", color: .piumsError) {
+                AuthService.shared.logout()
+            }
+        }
+        .background(Color(.tertiarySystemGroupedBackground))
+        .cornerRadius(16)
+        .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+    }
+
+    private var verificationRow: some View {
+        Button { showVerificacion = true } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(Color.piumsOrange)
+                        .frame(width: 30, height: 30)
+                    Image(systemName: "shield.checkered")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.white)
+                }
+                Text("Verificación de Identidad")
+                    .font(.subheadline)
+                    .foregroundColor(.primary)
+                Spacer()
+                if authService.needsVerification {
+                    Text("Pendiente")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(Color.piumsError)
+                        .clipShape(Capsule())
+                } else if artist?.isVerified == true {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.piumsSuccess)
+                        .font(.subheadline)
+                } else {
+                    Image(systemName: "chevron.right").font(.caption2).foregroundColor(.secondary)
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 13)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func settingsRow(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 7).fill(color).frame(width: 30, height: 30)
+                    Image(systemName: icon)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.white)
+                }
+                Text(label)
+                    .font(.subheadline)
+                    .foregroundColor(label == "Cerrar Sesión" ? .piumsError : .primary)
+                Spacer()
+                if label != "Cerrar Sesión" {
+                    Image(systemName: "chevron.right").font(.caption2).foregroundColor(.secondary)
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 13)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
 }
+
+// MARK: - ArtistData (retrocompatibilidad)
 
 struct ArtistData {
     var name: String
@@ -133,255 +287,7 @@ struct ArtistData {
     var bio: String
 }
 
-struct StatsSection: View {
-    // Mock stats data
-    let stats = [
-        StatItem(title: "Clientes atendidos", value: "1,234", icon: "person.2.fill", color: .blue),
-        StatItem(title: "Servicios completados", value: "2,156", icon: "checkmark.circle.fill", color: .green),
-        StatItem(title: "Ingresos este mes", value: "$3,250", icon: "dollarsign.circle.fill", color: .purple),
-        StatItem(title: "Valoración promedio", value: "4.8⭐", icon: "star.fill", color: .orange)
-    ]
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Estadísticas")
-                .font(.headline)
-                .fontWeight(.semibold)
-            
-            LazyVGrid(columns: [
-                GridItem(.flexible()),
-                GridItem(.flexible())
-            ], spacing: 16) {
-                ForEach(stats, id: \.title) { stat in
-                    StatCard(stat: stat)
-                }
-            }
-        }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 5)
-    }
-}
-
-struct StatItem {
-    let title: String
-    let value: String
-    let icon: String
-    let color: Color
-}
-
-struct StatCard: View {
-    let stat: StatItem
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: stat.icon)
-                    .foregroundColor(stat.color)
-                    .font(.title3)
-                Spacer()
-            }
-            
-            Text(stat.value)
-                .font(.title3)
-                .fontWeight(.bold)
-            
-            Text(stat.title)
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding()
-        .background(stat.color.opacity(0.1))
-        .cornerRadius(12)
-    }
-}
-
-struct ServicesSection: View {
-    let services = [
-        "Corte de cabello",
-        "Coloración",
-        "Peinados",
-        "Tratamientos",
-        "Barba y bigote"
-    ]
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Mis Servicios")
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                
-                Spacer()
-                
-                Button("Gestionar") {
-                    // Navigate to service management
-                }
-                .font(.subheadline)
-                .foregroundColor(.blue)
-            }
-            
-            LazyVGrid(columns: [
-                GridItem(.flexible()),
-                GridItem(.flexible())
-            ], spacing: 12) {
-                ForEach(services, id: \.self) { service in
-                    ServiceTag(service: service)
-                }
-            }
-        }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 5)
-    }
-}
-
-struct ServiceTag: View {
-    let service: String
-    
-    var body: some View {
-        Text(service)
-            .font(.subheadline)
-            .fontWeight(.medium)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(Color.blue.opacity(0.1))
-            .foregroundColor(.blue)
-            .cornerRadius(20)
-    }
-}
-
-struct SettingsSection: View {
-    @Binding var showingSettings: Bool
-    
-    let settingsOptions = [
-        SettingsOption(title: "Configuración", icon: "gearshape.fill", color: .gray),
-        SettingsOption(title: "Notificaciones", icon: "bell.fill", color: .blue),
-        SettingsOption(title: "Privacidad", icon: "lock.fill", color: .green),
-        SettingsOption(title: "Ayuda y Soporte", icon: "questionmark.circle.fill", color: .orange),
-        SettingsOption(title: "Acerca de", icon: "info.circle.fill", color: .purple),
-        SettingsOption(title: "Cerrar Sesión", icon: "rectangle.portrait.and.arrow.right.fill", color: .red)
-    ]
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Configuración")
-                .font(.headline)
-                .fontWeight(.semibold)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 16)
-            
-            VStack(spacing: 0) {
-                ForEach(Array(settingsOptions.enumerated()), id: \.offset) { index, option in
-                    Button {
-                        if option.title == "Configuración" {
-                            showingSettings = true
-                        } else {
-                            // Handle other settings actions
-                        }
-                    } label: {
-                        SettingsRow(option: option)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    
-                    if index < settingsOptions.count - 1 {
-                        Divider()
-                            .padding(.leading, 50)
-                    }
-                }
-            }
-        }
-        .padding(.vertical, 16)
-        .background(Color(.systemBackground))
-        .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 5)
-    }
-}
-
-struct SettingsOption {
-    let title: String
-    let icon: String
-    let color: Color
-}
-
-struct SettingsRow: View {
-    let option: SettingsOption
-    
-    var body: some View {
-        HStack(spacing: 16) {
-            Image(systemName: option.icon)
-                .foregroundColor(option.color)
-                .frame(width: 24, height: 24)
-            
-            Text(option.title)
-                .font(.subheadline)
-                .foregroundColor(.primary)
-            
-            Spacer()
-            
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundColor(.secondary)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-}
-
-struct EditProfileView: View {
-    @Binding var artist: ArtistData
-    @Environment(\.presentationMode) var presentationMode
-    @State private var tempArtist: ArtistData
-    
-    init(artist: Binding<ArtistData>) {
-        self._artist = artist
-        self._tempArtist = State(initialValue: artist.wrappedValue)
-    }
-    
-    var body: some View {
-        NavigationView {
-            Form {
-                Section("Información Personal") {
-                    TextField("Nombre completo", text: $tempArtist.name)
-                    TextField("Profesión", text: $tempArtist.profession)
-                    TextField("Especialidad", text: $tempArtist.specialty)
-                }
-                
-                Section("Contacto") {
-                    TextField("Teléfono", text: $tempArtist.phone)
-                        .keyboardType(.phonePad)
-                    TextField("Correo electrónico", text: $tempArtist.email)
-                        .keyboardType(.emailAddress)
-                }
-                
-                Section("Descripción") {
-                    TextField("Biografía", text: $tempArtist.bio, axis: .vertical)
-                        .lineLimit(3...6)
-                }
-            }
-            .navigationTitle("Editar Perfil")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancelar") {
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Guardar") {
-                        artist = tempArtist
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                    .fontWeight(.semibold)
-                }
-            }
-        }
-    }
-}
+// MARK: - Settings View
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -390,7 +296,6 @@ struct SettingsView: View {
     @State private var showEditProfile = false
     @State private var showChangePassword = false
 
-    // Editable fields
     @State private var editName = ""
     @State private var editPhone = ""
     @State private var editBio = ""
@@ -417,11 +322,8 @@ struct SettingsView: View {
                                 .foregroundStyle(Color.piumsOrange)
                         }
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(artist?.name ?? "Artista")
-                                .font(.headline)
-                            Text(artist?.email ?? "")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                            Text(artist?.name ?? "Artista").font(.headline)
+                            Text(artist?.email ?? "").font(.subheadline).foregroundStyle(.secondary)
                             Text("Artista Pro")
                                 .font(.caption)
                                 .padding(.horizontal, 8).padding(.vertical, 3)
@@ -433,17 +335,14 @@ struct SettingsView: View {
                     .padding(.vertical, 8)
                 }
 
-                // ── Mensajes ──
                 if let msg = successMessage {
                     Section {
                         HStack(spacing: 8) {
                             Image(systemName: "checkmark.circle.fill").foregroundColor(.piumsSuccess)
                             Text(msg).font(.caption)
                         }
-                        .padding(10)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.piumsSuccess.opacity(0.1))
-                        .cornerRadius(8)
+                        .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.piumsSuccess.opacity(0.1)).cornerRadius(8)
                     }
                     .listRowSeparator(.hidden)
                 }
@@ -453,32 +352,21 @@ struct SettingsView: View {
                             Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.piumsError)
                             Text(msg).font(.caption)
                         }
-                        .padding(10)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.piumsError.opacity(0.1))
-                        .cornerRadius(8)
+                        .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.piumsError.opacity(0.1)).cornerRadius(8)
                     }
                     .listRowSeparator(.hidden)
                 }
 
-                // ── Cuenta ──
                 Section("Cuenta") {
-                    Button {
-                        prepareEdit()
-                        showEditProfile = true
-                    } label: {
+                    Button { prepareEdit(); showEditProfile = true } label: {
                         Label("Editar perfil", systemImage: "person.circle")
                     }
-
-                    Button {
-                        clearPassFields()
-                        showChangePassword = true
-                    } label: {
+                    Button { clearPassFields(); showChangePassword = true } label: {
                         Label("Cambiar contraseña", systemImage: "lock.rotation")
                     }
                 }
 
-                // ── Apariencia ──
                 Section("Apariencia") {
                     Toggle(isOn: Binding(
                         get: { themeManager.storedScheme == "dark" },
@@ -489,20 +377,16 @@ struct SettingsView: View {
                     .tint(.piumsOrange)
                 }
 
-                // ── Ayuda y soporte ──
                 Section("Ayuda y soporte") {
-                    Label("Mis quejas", systemImage: "exclamationmark.bubble")
-                    Label("Términos y condiciones", systemImage: "doc.text")
-                    Label("Política de privacidad", systemImage: "hand.raised")
-                    Label("Contactar soporte", systemImage: "message")
+                    Label("Mis quejas",               systemImage: "exclamationmark.bubble")
+                    Label("Términos y condiciones",   systemImage: "doc.text")
+                    Label("Política de privacidad",   systemImage: "hand.raised")
+                    Label("Contactar soporte",        systemImage: "message")
                 }
                 .foregroundStyle(.primary)
 
-                // ── Cerrar sesión ──
                 Section {
-                    Button(role: .destructive) {
-                        showLogoutConfirm = true
-                    } label: {
+                    Button(role: .destructive) { showLogoutConfirm = true } label: {
                         HStack {
                             Spacer()
                             Label("Cerrar sesión", systemImage: "rectangle.portrait.and.arrow.right")
@@ -514,41 +398,24 @@ struct SettingsView: View {
             }
             .navigationTitle("Configuración")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cerrar") { dismiss() }
-                }
-            }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cerrar") { dismiss() } } }
             .confirmationDialog("¿Cerrar sesión?", isPresented: $showLogoutConfirm, titleVisibility: .visible) {
-                Button("Cerrar sesión", role: .destructive) {
-                    AuthService.shared.logout()
-                }
+                Button("Cerrar sesión", role: .destructive) { AuthService.shared.logout() }
                 Button("Cancelar", role: .cancel) {}
             }
-            .sheet(isPresented: $showEditProfile) {
-                editProfileSheet
-            }
-            .sheet(isPresented: $showChangePassword) {
-                changePasswordSheet
-            }
+            .sheet(isPresented: $showEditProfile) { editProfileSheet }
+            .sheet(isPresented: $showChangePassword) { changePasswordSheet }
         }
         .preferredColorScheme(themeManager.colorScheme)
     }
 
-    // MARK: - Edit Profile Sheet
     private var editProfileSheet: some View {
         NavigationView {
             Form {
-                Section("Nombre") {
-                    TextField("Nombre completo", text: $editName)
-                }
-                Section("Teléfono") {
-                    TextField("Teléfono", text: $editPhone)
-                        .keyboardType(.phonePad)
-                }
+                Section("Nombre") { TextField("Nombre completo", text: $editName) }
+                Section("Teléfono") { TextField("Teléfono", text: $editPhone).keyboardType(.phonePad) }
                 Section("Biografía") {
-                    TextField("Cuéntanos sobre ti", text: $editBio, axis: .vertical)
-                        .lineLimit(3...6)
+                    TextField("Cuéntanos sobre ti", text: $editBio, axis: .vertical).lineLimit(3...6)
                 }
                 if let msg = errorMessage {
                     Section {
@@ -556,36 +423,25 @@ struct SettingsView: View {
                             Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.piumsError)
                             Text(msg).font(.caption)
                         }
-                    }
-                    .listRowSeparator(.hidden)
+                    }.listRowSeparator(.hidden)
                 }
             }
-            .navigationTitle("Editar perfil")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Editar perfil").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Guardar") {
-                        Task { await saveProfile() }
-                    }
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.piumsOrange)
-                    .disabled(isSaving)
+                    Button("Guardar") { Task { await saveProfile() } }
+                        .fontWeight(.semibold).foregroundStyle(Color.piumsOrange).disabled(isSaving)
                 }
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancelar") { showEditProfile = false }
-                }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { showEditProfile = false } }
             }
             .overlay { if isSaving { ProgressView() } }
         }
     }
 
-    // MARK: - Change Password Sheet
     private var changePasswordSheet: some View {
         NavigationView {
             Form {
-                Section("Contraseña actual") {
-                    SecureField("Contraseña actual", text: $currentPassword)
-                }
+                Section("Contraseña actual") { SecureField("Contraseña actual", text: $currentPassword) }
                 Section("Nueva contraseña") {
                     SecureField("Nueva contraseña", text: $newPassword)
                     SecureField("Confirmar nueva contraseña", text: $confirmPassword)
@@ -596,108 +452,61 @@ struct SettingsView: View {
                             Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.piumsError)
                             Text(msg).font(.caption)
                         }
-                    }
-                    .listRowSeparator(.hidden)
+                    }.listRowSeparator(.hidden)
                 }
             }
-            .navigationTitle("Cambiar contraseña")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Cambiar contraseña").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Guardar") {
-                        Task { await changePassword() }
-                    }
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.piumsOrange)
-                    .disabled(isSaving)
+                    Button("Guardar") { Task { await changePassword() } }
+                        .fontWeight(.semibold).foregroundStyle(Color.piumsOrange).disabled(isSaving)
                 }
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancelar") { showChangePassword = false }
-                }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { showChangePassword = false } }
             }
         }
     }
 
-    // MARK: - Helpers
-
     private var initials: String {
-        let name = artist?.name ?? "A"
-        return name.components(separatedBy: " ")
-            .compactMap { $0.first.map(String.init) }
-            .prefix(2)
-            .joined()
-            .uppercased()
+        (artist?.name ?? "A").components(separatedBy: " ")
+            .compactMap { $0.first.map(String.init) }.prefix(2).joined().uppercased()
     }
 
     private func prepareEdit() {
-        editName = artist?.name ?? ""
-        editPhone = artist?.phone ?? ""
-        editBio = artist?.bio ?? ""
-        errorMessage = nil
-        successMessage = nil
+        editName = artist?.name ?? ""; editPhone = artist?.phone ?? ""; editBio = artist?.bio ?? ""
+        errorMessage = nil; successMessage = nil
     }
 
     private func clearPassFields() {
-        currentPassword = ""
-        newPassword = ""
-        confirmPassword = ""
-        errorMessage = nil
-        successMessage = nil
+        currentPassword = ""; newPassword = ""; confirmPassword = ""
+        errorMessage = nil; successMessage = nil
     }
 
     private func saveProfile() async {
-        isSaving = true
-        errorMessage = nil
+        isSaving = true; errorMessage = nil
         do {
             let body = UpdateUserRequest(name: editName, phone: editPhone, bio: editBio, location: nil)
-            let _ = try await APIService.shared.put(
-                endpoint: .updateUserProfile,
-                body: body,
-                responseType: UserDTO.self
-            )
-            // Update local
-            artist?.name = editName
-            artist?.phone = editPhone
-            artist?.bio = editBio
+            let _ = try await APIService.shared.put(endpoint: .updateUserProfile, body: body, responseType: UserDTO.self)
+            artist?.name = editName; artist?.phone = editPhone; artist?.bio = editBio
             successMessage = "Perfil actualizado correctamente"
             showEditProfile = false
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+        } catch { errorMessage = error.localizedDescription }
         isSaving = false
     }
 
     private func changePassword() async {
-        guard newPassword == confirmPassword else {
-            errorMessage = "Las contraseñas no coinciden"
-            return
-        }
-        guard newPassword.count >= 6 else {
-            errorMessage = "La contraseña debe tener al menos 6 caracteres"
-            return
-        }
-        isSaving = true
-        errorMessage = nil
+        guard newPassword == confirmPassword else { errorMessage = "Las contraseñas no coinciden"; return }
+        guard newPassword.count >= 6 else { errorMessage = "Mínimo 6 caracteres"; return }
+        isSaving = true; errorMessage = nil
         do {
-            struct ChangePassBody: Codable {
-                let currentPassword: String
-                let newPassword: String
-            }
-            let body = ChangePassBody(currentPassword: currentPassword, newPassword: newPassword)
+            struct Body: Codable { let currentPassword: String; let newPassword: String }
             let _ = try await APIService.shared.post(
-                endpoint: .changePassword,
-                body: body,
-                responseType: EmptyResponseDTO.self
-            )
+                endpoint: .changePassword, body: Body(currentPassword: currentPassword, newPassword: newPassword),
+                responseType: EmptyResponseDTO.self)
             successMessage = "Contraseña cambiada correctamente"
             showChangePassword = false
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+        } catch { errorMessage = error.localizedDescription }
         isSaving = false
     }
 }
 
-#Preview {
-    ProfileView()
-}
+#Preview { ProfileView() }

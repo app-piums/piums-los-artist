@@ -2,322 +2,307 @@
 //  MessagesView.swift
 //  PiumsArtist
 //
-//  Created by piums on 13/04/26.
+//  Estilo idéntico al de la app de cliente (ChatInboxView / ChatDetailView).
+//  Conectado a MessagesViewModel — carga conversaciones y mensajes reales del backend.
 //
 
 import SwiftUI
 
+// MARK: - MessagesView
+
 struct MessagesView: View {
-    @State private var searchText = ""
-    
-    // Mock messages data
-    let mockConversations = [
-        Conversation(
-            id: 1,
-            clientName: "María García",
-            clientAvatar: "person.circle.fill",
-            lastMessage: "¡Perfecto! Nos vemos mañana a las 10:00",
-            timestamp: Date(),
-            unreadCount: 0,
-            isOnline: true
-        ),
-        Conversation(
-            id: 2,
-            clientName: "Ana López",
-            clientAvatar: "person.circle.fill",
-            lastMessage: "¿Podrías confirmar la cita?",
-            timestamp: Calendar.current.date(byAdding: .hour, value: -2, to: Date()) ?? Date(),
-            unreadCount: 2,
-            isOnline: false
-        ),
-        Conversation(
-            id: 3,
-            clientName: "Carlos Ruiz",
-            clientAvatar: "person.circle.fill",
-            lastMessage: "Gracias por el excelente servicio",
-            timestamp: Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date(),
-            unreadCount: 0,
-            isOnline: true
-        ),
-        Conversation(
-            id: 4,
-            clientName: "Laura Martín",
-            clientAvatar: "person.circle.fill",
-            lastMessage: "¿Tienes disponibilidad para el viernes?",
-            timestamp: Calendar.current.date(byAdding: .day, value: -2, to: Date()) ?? Date(),
-            unreadCount: 1,
-            isOnline: false
-        )
-    ]
-    
-    var filteredConversations: [Conversation] {
-        if searchText.isEmpty {
-            return mockConversations
-        } else {
-            return mockConversations.filter { conversation in
-                conversation.clientName.localizedCaseInsensitiveContains(searchText) ||
-                conversation.lastMessage.localizedCaseInsensitiveContains(searchText)
+    @StateObject private var viewModel = MessagesViewModel()
+
+    var body: some View {
+        ZStack {
+            Color(.secondarySystemGroupedBackground).ignoresSafeArea()
+            Group {
+                if viewModel.isLoading && viewModel.conversations.isEmpty {
+                    ProgressView().tint(.piumsOrange)
+                } else if let err = viewModel.errorMessage {
+                    errorState(err)
+                } else if viewModel.filteredConversations.isEmpty {
+                    emptyState
+                } else {
+                    conversationList
+                }
             }
         }
+        .searchable(text: $viewModel.searchText, prompt: "Buscar conversaciones")
+        .onChange(of: viewModel.searchText) { _, text in viewModel.updateSearchText(text) }
+        .navigationTitle("Mensajes")
+        .navigationBarTitleDisplayMode(.large)
+        .task { await viewModel.loadConversations() }
+        .toolbarBackground(Color(.secondarySystemGroupedBackground), for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
     }
-    
-    var body: some View {
-        NavigationView {
-            VStack {
-                // Search bar
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.secondary)
-                    
-                    TextField("Buscar conversaciones...", text: $searchText)
-                        .textFieldStyle(PlainTextFieldStyle())
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(Color(.systemGray6))
-                .cornerRadius(10)
-                .padding(.horizontal)
-                
-                // Conversations list
-                if filteredConversations.isEmpty {
-                    VStack(spacing: 16) {
-                        Image(systemName: "message")
-                            .font(.system(size: 60))
-                            .foregroundColor(.gray)
-                        
-                        Text(searchText.isEmpty ? "No hay conversaciones" : "No se encontraron conversaciones")
-                            .font(.title3)
-                            .fontWeight(.medium)
-                        
-                        Text(searchText.isEmpty ? "Las conversaciones con tus clientes aparecerán aquí" : "Intenta con otros términos de búsqueda")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    List {
-                        ForEach(filteredConversations) { conversation in
-                            NavigationLink(destination: ChatDetailView(conversation: conversation)) {
-                                ConversationRow(conversation: conversation)
-                            }
-                            .listRowSeparator(.hidden)
-                            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+
+    // MARK: - List
+
+    private var conversationList: some View {
+        List {
+            ForEach(viewModel.filteredConversations) { conv in
+                ConversationRow(conversation: conv)
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                    .background(
+                        NavigationLink("") {
+                            ChatDetailView(conversation: conv, viewModel: viewModel)
                         }
-                    }
-                    .listStyle(PlainListStyle())
-                }
+                        .opacity(0)
+                    )
             }
-            .navigationTitle("Mensajes")
-            .navigationBarTitleDisplayMode(.large)
+            if viewModel.isLoading {
+                ProgressView().frame(maxWidth: .infinity).listRowSeparator(.hidden)
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .refreshable { await viewModel.loadConversations() }
+    }
+
+    // MARK: - Empty / Error
+
+    private var emptyState: some View {
+        VStack(spacing: 16) {
+            Spacer()
+            Image(systemName: "message.fill")
+                .font(.system(size: 56))
+                .foregroundStyle(.secondary.opacity(0.3))
+            Text(viewModel.searchText.isEmpty ? "Sin conversaciones" : "Sin resultados")
+                .font(.title3.weight(.semibold))
+            Text(viewModel.searchText.isEmpty
+                 ? "Las conversaciones con tus clientes aparecerán aquí"
+                 : "Intenta con otros términos de búsqueda")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+            Spacer()
+        }
+    }
+
+    private func errorState(_ message: String) -> some View {
+        VStack(spacing: 16) {
+            Spacer()
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 44))
+                .foregroundColor(.piumsWarning)
+            Text("No se pudieron cargar los mensajes")
+                .font(.headline)
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+            Button("Reintentar") {
+                Task { await viewModel.loadConversations() }
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.piumsOrange)
+            Spacer()
         }
     }
 }
 
-struct Conversation: Identifiable {
-    let id: Int
-    let clientName: String
-    let clientAvatar: String
-    let lastMessage: String
-    let timestamp: Date
-    let unreadCount: Int
-    let isOnline: Bool
-}
+// MARK: - ConversationRow (mismo estilo que cliente)
 
 struct ConversationRow: View {
-    let conversation: Conversation
-    
-    private var timeFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        
-        if Calendar.current.isDateInToday(conversation.timestamp) {
-            formatter.dateFormat = "HH:mm"
-        } else if Calendar.current.isDate(conversation.timestamp, equalTo: Date(), toGranularity: .weekOfYear) {
-            formatter.dateFormat = "EEE"
-        } else {
-            formatter.dateFormat = "dd/MM"
-        }
-        
-        return formatter
-    }
-    
+    let conversation: MessagesViewModel.ConversationItem
+
     var body: some View {
         HStack(spacing: 12) {
-            // Avatar with online indicator
+            // Avatar con inicial
             ZStack {
                 Circle()
-                    .fill(Color.blue.opacity(0.2))
-                    .frame(width: 50, height: 50)
-                    .overlay(
-                        Image(systemName: conversation.clientAvatar)
-                            .foregroundColor(.blue)
-                            .font(.title3)
-                    )
-                
-                if conversation.isOnline {
-                    Circle()
-                        .fill(Color.green)
-                        .frame(width: 12, height: 12)
-                        .offset(x: 18, y: 18)
-                        .overlay(
-                            Circle()
-                                .stroke(Color.white, lineWidth: 2)
-                                .frame(width: 12, height: 12)
-                        )
-                }
+                    .fill(statusColor.opacity(0.15))
+                    .frame(width: 48, height: 48)
+                Text(String(conversation.clientName.prefix(1)).uppercased())
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(statusColor)
             }
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(conversation.clientName)
-                        .font(.headline)
-                        .fontWeight(.medium)
-                    
+                        .font(.subheadline.bold())
+                        .lineLimit(1)
                     Spacer()
-                    
-                    Text(timeFormatter.string(from: conversation.timestamp))
+                    Text(relativeDate)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
-                
-                HStack {
-                    Text(conversation.lastMessage)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .lineLimit(2)
-                    
-                    Spacer()
-                    
-                    if conversation.unreadCount > 0 {
-                        Text("\(conversation.unreadCount)")
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.white)
-                            .frame(minWidth: 20, minHeight: 20)
-                            .background(Color.blue)
-                            .cornerRadius(10)
-                    }
-                }
+
+                // Badge de estado de la conversación
+                Text(statusLabel)
+                    .font(.caption2.bold())
+                    .padding(.horizontal, 8).padding(.vertical, 2)
+                    .background(statusColor.opacity(0.12))
+                    .foregroundStyle(statusColor)
+                    .clipShape(Capsule())
+            }
+
+            // Badge de no leídos
+            if conversation.unreadCount > 0 {
+                Text("\(conversation.unreadCount)")
+                    .font(.caption.bold())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(Capsule().fill(Color.piumsOrange))
             }
         }
-        .padding(.vertical, 8)
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
+        .padding(14)
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private var statusColor: Color {
+        switch conversation.status.uppercased() {
+        case "ACTIVE":  return .piumsOrange
+        case "PENDING": return .blue
+        case "CLOSED":  return .secondary
+        default:        return .piumsOrange
+        }
+    }
+
+    private var statusLabel: String {
+        switch conversation.status.uppercased() {
+        case "ACTIVE":  return "Activa"
+        case "PENDING": return "Pendiente"
+        case "CLOSED":  return "Cerrada"
+        default:        return "Activa"
+        }
+    }
+
+    private var relativeDate: String {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f.localizedString(for: conversation.timestamp, relativeTo: Date())
     }
 }
 
+// MARK: - ChatDetailView (mismo patrón que cliente)
+
 struct ChatDetailView: View {
-    let conversation: Conversation
-    @State private var messageText = ""
-    @State private var messages: [ChatMessage] = []
-    
+    let conversation: MessagesViewModel.ConversationItem
+    @ObservedObject var viewModel: MessagesViewModel
+
+    @State private var messages: [MessagesViewModel.MessageItem] = []
+    @State private var newMessage = ""
+    @State private var isLoading = false
+
     var body: some View {
-        VStack {
-            // Messages list
-            ScrollView {
-                LazyVStack(spacing: 8) {
-                    ForEach(messages) { message in
-                        ChatBubble(message: message)
+        VStack(spacing: 0) {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 4) {
+                        ForEach(messages) { msg in
+                            ChatBubbleView(message: msg)
+                                .id(msg.id)
+                        }
+                        Color.clear.frame(height: 8).id("bottom")
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
                 }
-                .padding()
-            }
-            
-            // Message input
-            HStack {
-                TextField("Escribir mensaje...", text: $messageText, axis: .vertical)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .lineLimit(1...4)
-                
-                Button {
-                    sendMessage()
-                } label: {
-                    Image(systemName: "paperplane.fill")
-                        .foregroundColor(.white)
-                        .frame(width: 35, height: 35)
-                        .background(messageText.isEmpty ? Color.gray : Color.blue)
-                        .cornerRadius(17.5)
+                .scrollIndicators(.hidden)
+                .onChange(of: messages.count) { _, _ in
+                    withAnimation { proxy.scrollTo("bottom") }
                 }
-                .disabled(messageText.isEmpty)
+                .onAppear {
+                    proxy.scrollTo("bottom")
+                }
             }
-            .padding()
+        }
+        .background(Color(.secondarySystemGroupedBackground).ignoresSafeArea())
+        .safeAreaInset(edge: .bottom) {
+            inputBar
         }
         .navigationTitle(conversation.clientName)
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            loadMockMessages()
+        .task {
+            isLoading = true
+            messages = await viewModel.loadMessages(for: conversation.conversationId)
+            isLoading = false
+        }
+        .overlay {
+            if isLoading {
+                ProgressView().tint(.piumsOrange)
+            }
         }
     }
-    
-    private func loadMockMessages() {
-        messages = [
-            ChatMessage(id: 1, text: "Hola, ¿tienes disponibilidad para mañana?", isFromClient: true, timestamp: Calendar.current.date(byAdding: .hour, value: -3, to: Date()) ?? Date()),
-            ChatMessage(id: 2, text: "¡Hola! Sí, tengo disponibilidad. ¿A qué hora te vendría bien?", isFromClient: false, timestamp: Calendar.current.date(byAdding: .hour, value: -2, to: Date()) ?? Date()),
-            ChatMessage(id: 3, text: "¿Podrías a las 10:00 AM?", isFromClient: true, timestamp: Calendar.current.date(byAdding: .hour, value: -2, to: Date()) ?? Date()),
-            ChatMessage(id: 4, text: "Perfecto, te confirmo la cita para mañana a las 10:00 AM", isFromClient: false, timestamp: Calendar.current.date(byAdding: .hour, value: -1, to: Date()) ?? Date())
-        ]
+
+    // MARK: Input bar
+
+    private var inputBar: some View {
+        HStack(spacing: 12) {
+            TextField("Escribe un mensaje...", text: $newMessage, axis: .vertical)
+                .textFieldStyle(.roundedBorder)
+                .lineLimit(1...4)
+
+            Button {
+                send()
+            } label: {
+                Image(systemName: "paperplane.fill")
+                    .foregroundStyle(
+                        newMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ? Color.secondary : Color.piumsOrange
+                    )
+                    .font(.system(size: 20))
+            }
+            .disabled(newMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.bar)
     }
-    
-    private func sendMessage() {
-        let newMessage = ChatMessage(
-            id: messages.count + 1,
-            text: messageText,
-            isFromClient: false,
-            timestamp: Date()
+
+    private func send() {
+        let text = newMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        newMessage = ""
+
+        // Optimistic append
+        let optimistic = MessagesViewModel.MessageItem(
+            content: text,
+            isFromArtist: true,
+            timestamp: Date(),
+            isRead: false
         )
-        
-        withAnimation {
-            messages.append(newMessage)
-        }
-        
-        messageText = ""
+        messages.append(optimistic)
+
+        viewModel.sendMessage(text, conversationId: conversation.conversationId)
     }
 }
 
-struct ChatMessage: Identifiable {
-    let id: Int
-    let text: String
-    let isFromClient: Bool
-    let timestamp: Date
-}
+// MARK: - ChatBubbleView (mismo estilo que cliente)
 
-struct ChatBubble: View {
-    let message: ChatMessage
-    
-    private var timeFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return formatter
-    }
-    
+struct ChatBubbleView: View {
+    let message: MessagesViewModel.MessageItem
+
     var body: some View {
-        HStack {
-            if !message.isFromClient {
-                Spacer()
+        VStack(alignment: message.isFromArtist ? .trailing : .leading, spacing: 2) {
+            HStack {
+                if message.isFromArtist { Spacer(minLength: 60) }
+                Text(message.content)
+                    .font(.subheadline)
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(message.isFromArtist ? Color.piumsOrange : Color(.secondarySystemBackground))
+                    .foregroundStyle(message.isFromArtist ? .white : .primary)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                if !message.isFromArtist { Spacer(minLength: 60) }
             }
-            
-            VStack(alignment: message.isFromClient ? .leading : .trailing, spacing: 4) {
-                Text(message.text)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(message.isFromClient ? Color(.systemGray5) : Color.blue)
-                    .foregroundColor(message.isFromClient ? .primary : .white)
-                    .cornerRadius(18)
-                
-                Text(timeFormatter.string(from: message.timestamp))
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 4)
-            }
-            .frame(maxWidth: 250, alignment: message.isFromClient ? .leading : .trailing)
-            
-            if message.isFromClient {
-                Spacer()
-            }
+            Text(formattedTime)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 4)
         }
     }
-}
 
-#Preview {
-    MessagesView()
+    private var formattedTime: String {
+        let df = DateFormatter()
+        df.dateFormat = "HH:mm"
+        return df.string(from: message.timestamp)
+    }
 }

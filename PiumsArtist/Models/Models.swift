@@ -89,31 +89,41 @@ final class Artist {
 @Model
 final class Service {
     var id: UUID
+    /// ID real del servicio en el backend (necesario para delete/update/toggle)
+    var remoteId: String
     var name: String
     var serviceDescription: String
     var duration: Int
     var price: Double
     var isActive: Bool
     var category: String
+    var categoryId: String   // UUID de la categoría — requerido por el backend
+    var slug: String         // slug único — requerido por el backend
     var pricingType: String
     var createdAt: Date
     var updatedAt: Date
-    
+
     init(
+        remoteId: String = "",
         name: String,
         description: String,
         duration: Int,
         price: Double,
         category: String = "General",
+        categoryId: String = "",
+        slug: String = "",
         isActive: Bool = true,
         pricingType: String = "FIXED"
     ) {
         self.id = UUID()
+        self.remoteId = remoteId
         self.name = name
         self.serviceDescription = description
         self.duration = duration
         self.price = price
         self.category = category
+        self.categoryId = categoryId
+        self.slug = slug
         self.pricingType = pricingType
         self.isActive = isActive
         self.createdAt = Date()

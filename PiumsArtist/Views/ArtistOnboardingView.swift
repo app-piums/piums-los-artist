@@ -201,22 +201,64 @@ final class ArtistOnboardingViewModel: ObservableObject {
                 )
             }
 
-            // 3. Create first service if provided
-            if !serviceName.isEmpty && !serviceDescription.isEmpty {
-                struct SvcBody: Codable {
-                    let name: String; let description: String
-                    let category: String?; let priceDecimal: Double
-                    let durationMin: Int; let status: String
+            // 3. Obtener el artistId del backend (necesario para crear el servicio)
+            //    — el perfil puede haberse cargado en ProfileViewModel; si no, lo cargamos aquí.
+            if AuthService.shared.artistBackendId == nil {
+                if let profileResp = try? await APIService.shared.get(
+                    endpoint: .artistDashboard,
+                    responseType: ArtistProfileResponseDTO.self
+                ) {
+                    AuthService.shared.artistBackendId = profileResp.artist.id
                 }
-                let price = Double(basePrice) ?? 0
-                let svcBody = SvcBody(name: serviceName, description: serviceDescription,
-                                      category: serviceCategory.isEmpty ? nil : serviceCategory,
-                                      priceDecimal: price, durationMin: 60, status: "ACTIVE")
-                let _ = try? await APIService.shared.post(
-                    endpoint: .createService,
-                    body: svcBody,
-                    responseType: EmptyResponseDTO.self
-                )
+            }
+
+            // 4. Create first service if provided and we have an artistId
+            if !serviceName.isEmpty && !serviceDescription.isEmpty,
+               let artistId = AuthService.shared.artistBackendId {
+
+                // Cargar categorías para obtener un categoryId válido
+                let categories = (try? await APIService.shared.get(
+                    endpoint: .serviceCategories,
+                    responseType: ServiceCategoriesResponseDTO.self
+                )) ?? []
+
+                // Intentar coincidir con la categoría elegida en el onboarding; si no, usar la primera
+                let matchedCategory = categories.first {
+                    $0.slug?.localizedCaseInsensitiveContains(serviceCategory) == true ||
+                    $0.name.localizedCaseInsensitiveContains(serviceCategory)
+                } ?? categories.first
+
+                if let categoryId = matchedCategory?.id {
+                    let price = Double(basePrice) ?? 0
+                    let rawDesc = serviceDescription
+                    // Backend exige mínimo 10 chars en description
+                    let desc = rawDesc.count >= 10 ? rawDesc : rawDesc + String(repeating: ".", count: max(0, 10 - rawDesc.count))
+                    // Slug único a partir del nombre
+                    let slugBase = serviceName
+                        .lowercased()
+                        .folding(options: .diacriticInsensitive, locale: .current)
+                        .components(separatedBy: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-")).inverted)
+                        .joined(separator: "-")
+                        .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+                    let slug = (slugBase.isEmpty ? "servicio" : slugBase) + "-\(Int.random(in: 1000...9999))"
+
+                    let svcBody = CreateServiceRequest(
+                        artistId: artistId,
+                        name: serviceName,
+                        slug: slug,
+                        description: desc,
+                        categoryId: categoryId,
+                        pricingType: "FIXED",
+                        basePrice: Int(price * 100),
+                        currency: "GTQ",
+                        durationMin: 60
+                    )
+                    let _ = try? await APIService.shared.post(
+                        endpoint: .createService,
+                        body: svcBody,
+                        responseType: ServiceDTO.self
+                    )
+                }
             }
 
         }
@@ -369,8 +411,10 @@ private struct OnbWelcomeStep: View {
 
             VStack(spacing: 0) {
                 HStack {
-                    Text("Piums").font(.system(size:22,weight:.heavy,design:.rounded))
-                        .foregroundStyle(LinearGradient(colors:[.piumsOrange,.piumsAccent],startPoint:.leading,endPoint:.trailing))
+                    Image("PiumsLogo")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(height: 48)
                     Spacer()
                     Button("Omitir") { Task { await vm.skip() } }
                         .font(.subheadline).foregroundColor(.white.opacity(0.55))

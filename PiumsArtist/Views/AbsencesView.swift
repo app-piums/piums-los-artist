@@ -64,7 +64,7 @@ struct AbsencesView: View {
                     .padding(.bottom, 120)
             }
         }
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .background(Color(.secondarySystemGroupedBackground).ignoresSafeArea())
         .navigationTitle("Ausencias y Viajes")
         .navigationBarTitleDisplayMode(.large)
         .refreshable { await viewModel.loadAbsences() }

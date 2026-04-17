@@ -23,7 +23,7 @@ final class ThemeManager: ObservableObject {
     }
 
     private init() {
-        self.storedScheme = UserDefaults.standard.string(forKey: "piums_color_scheme") ?? "light"
+        self.storedScheme = UserDefaults.standard.string(forKey: "piums_color_scheme") ?? "dark"
     }
 
     var colorScheme: ColorScheme? {

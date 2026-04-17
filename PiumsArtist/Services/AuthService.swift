@@ -17,6 +17,8 @@ final class AuthService: ObservableObject {
     @Published var currentArtist: Artist?
     @Published var isLoading = false
     @Published var errorMessage: String?
+    /// true si el artista aún no ha enviado sus documentos de verificación
+    @Published var needsVerification = false
     
     private let apiService = APIService.shared
     private var cancellables = Set<AnyCancellable>()
@@ -77,7 +79,10 @@ final class AuthService: ObservableObject {
             // Parse expires time if provided (e.g. "15m"), default 15min
             let expiresInSeconds = parseExpiresIn(response.expiresIn ?? "15m")
             scheduleTokenRefresh(expiresIn: expiresInSeconds)
-            
+
+            // Verificar si el artista necesita subir documentos de identidad
+            await checkVerificationStatus()
+
         } catch {
             if let apiError = error as? APIError {
                 errorMessage = apiError.errorDescription
@@ -188,6 +193,19 @@ final class AuthService: ObservableObject {
             currentArtist = nil
         }
     }
+
+    /// Consulta GET /auth/me para saber si el artista ya subió sus documentos.
+    func checkVerificationStatus() async {
+        do {
+            let me = try await apiService.get(endpoint: .authMe, responseType: AuthMeDTO.self)
+            let hasDocuments = !(me.documentFrontUrl ?? "").isEmpty
+            needsVerification = !hasDocuments
+        } catch {
+            print("[AUTH] checkVerificationStatus error: \(error)")
+            // No forzar la pantalla si hay error de red
+            needsVerification = false
+        }
+    }
     
     /// Decodifica el payload del JWT sin verificar firma (solo para leer datos del usuario)
     private func decodeJWTUser(token: String) -> Artist? {
@@ -255,17 +273,40 @@ final class AuthService: ObservableObject {
     }
     
     // MARK: - Helper Methods
-    
+
     var isLoggedIn: Bool {
         return isAuthenticated && currentArtist != nil
     }
-    
+
     var artistName: String {
         return currentArtist?.name ?? "Artista"
     }
-    
+
     var artistEmail: String {
         return currentArtist?.email ?? storedEmail
+    }
+
+    /// ID del perfil de artista en el backend (guardado en UserDefaults al cargar el perfil).
+    /// Distinto del userId del auth — es el `id` de la tabla artists/artist_profiles.
+    var artistBackendId: String? {
+        get { UserDefaults.standard.string(forKey: "artist_backend_id") }
+        set { UserDefaults.standard.set(newValue, forKey: "artist_backend_id") }
+    }
+
+    /// The backend user ID extracted from the JWT — used to detect message direction (sent vs received).
+    var currentUserId: String? {
+        guard let token = apiService.authToken else { return nil }
+        let parts = token.components(separatedBy: ".")
+        guard parts.count == 3 else { return nil }
+        var base64 = String(parts[1])
+        let remainder = base64.count % 4
+        if remainder > 0 { base64 += String(repeating: "=", count: 4 - remainder) }
+        base64 = base64
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        guard let data = Data(base64Encoded: base64),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return json["id"] as? String
     }
     
     // MARK: - Auto-login Support
@@ -284,11 +325,16 @@ final class AuthService: ObservableObject {
 struct AuthenticatedView<Content: View>: View {
     @StateObject private var authService = AuthService.shared
     @ViewBuilder var content: () -> Content
-    
+
     var body: some View {
         Group {
             if authService.isLoggedIn {
                 content()
+                    .fullScreenCover(isPresented: $authService.needsVerification) {
+                        VerificacionView(onComplete: {
+                            authService.needsVerification = false
+                        })
+                    }
             } else {
                 LoginView()
             }
@@ -362,15 +408,10 @@ struct LoginView: View {
             VStack(spacing: 0) {
                 VStack(spacing: 20) {
                     // Logo
-                    Text("Piums")
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.piumsOrange, .piumsAccent],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
+                    Image("PiumsLogo")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(height: 52)
                         .opacity(animateIn ? 1 : 0)
                         .offset(y: animateIn ? 0 : -20)
                     
@@ -398,7 +439,7 @@ struct LoginView: View {
                     .opacity(animateIn ? 1 : 0)
                     
                     VStack(spacing: 6) {
-                        Text("Panel de Artistas Piums")
+                        Text("Panel de Artistas")
                             .font(.title2.weight(.bold))
                             .foregroundColor(.white)
                         

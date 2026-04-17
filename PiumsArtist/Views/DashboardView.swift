@@ -35,47 +35,50 @@ struct DashboardView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                // ── Header ──
-                headerView
-                    .padding(.horizontal, 20)
-                    .padding(.top, 12)
-                    .padding(.bottom, 24)
-
-                VStack(spacing: 24) {
-                    // ── Greeting + date ──
-                    greetingSection
+        ZStack {
+            Color(.secondarySystemGroupedBackground).ignoresSafeArea()
+            ScrollView {
+                VStack(spacing: 0) {
+                    // ── Header ──
+                    headerView
                         .padding(.horizontal, 20)
+                        .padding(.top, 12)
+                        .padding(.bottom, 24)
 
-                    // ── Earnings card ──
-                    earningsCard
-                        .padding(.horizontal, 20)
+                    VStack(spacing: 24) {
+                        // ── Greeting + date ──
+                        greetingSection
+                            .padding(.horizontal, 20)
 
-                    // ── Pendientes + Visitas ──
-                    secondaryMetricsRow
-                        .padding(.horizontal, 20)
+                        // ── Earnings card ──
+                        earningsCard
+                            .padding(.horizontal, 20)
 
-                    // ── Fortaleza del Perfil ──
-                    profileStrengthCard
-                        .padding(.horizontal, 20)
+                        // ── Pendientes + Visitas ──
+                        secondaryMetricsRow
+                            .padding(.horizontal, 20)
 
-                    // ── Resumen de Ingresos / Próximas presentaciones ──
-                    upcomingSection
-                        .padding(.horizontal, 20)
+                        // ── Fortaleza del Perfil ──
+                        profileStrengthCard
+                            .padding(.horizontal, 20)
+
+                        // ── Resumen de Ingresos / Próximas presentaciones ──
+                        upcomingSection
+                            .padding(.horizontal, 20)
+                    }
+                    .padding(.bottom, 110)
                 }
-                .padding(.bottom, 110)
             }
-        }
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
-        .refreshable { await viewModel.refreshData() }
-        .onAppear {
-            viewModel.setModelContext(modelContext)
-            withAnimation(.spring(response: 0.7, dampingFraction: 0.8).delay(0.15)) {
-                animateStats = true
+            .refreshable { await viewModel.refreshData() }
+            .onAppear {
+                viewModel.setModelContext(modelContext)
+                withAnimation(.spring(response: 0.7, dampingFraction: 0.8).delay(0.15)) {
+                    animateStats = true
+                }
             }
+            .sheet(isPresented: $showingNotifications) { NotificationsSheet() }
         }
-        .sheet(isPresented: $showingNotifications) { NotificationsSheet() }
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     // MARK: - Header
@@ -91,16 +94,11 @@ struct DashboardView: View {
 
             Spacer()
 
-            // PIUMS wordmark
-            Text("PIUMS")
-                .font(.system(size: 20, weight: .heavy, design: .rounded))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.piumsOrange, .piumsAccent],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
+            // PIUMS logo
+            Image("PiumsLogo")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(height: 52)
 
             Spacer()
 
@@ -108,7 +106,7 @@ struct DashboardView: View {
             HStack(spacing: 10) {
                 Button { showingNotifications = true } label: {
                     ZStack(alignment: .topTrailing) {
-                        Image(systemName: "gearshape.fill")
+                        Image(systemName: "bell.fill")
                             .font(.callout.weight(.medium))
                             .foregroundColor(.piumsTextSecondary)
                             .frame(width: 38, height: 38)
@@ -172,7 +170,7 @@ struct DashboardView: View {
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.systemBackground))
+        .background(Color(.tertiarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 20))
         .shadow(color: .black.opacity(0.05), radius: 8, y: 3)
         .scaleEffect(animateStats ? 1 : 0.95)
@@ -219,7 +217,7 @@ struct DashboardView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.systemBackground))
+        .background(Color(.tertiarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .shadow(color: .black.opacity(0.05), radius: 6, y: 2)
         .scaleEffect(animateStats ? 1 : 0.95)
@@ -365,7 +363,7 @@ struct DashboardView: View {
                     }
                 }
                 .padding(20)
-                .background(Color(.systemBackground))
+                .background(Color(.tertiarySystemGroupedBackground))
                 .clipShape(RoundedRectangle(cornerRadius: 20))
                 .shadow(color: .black.opacity(0.05), radius: 8, y: 3)
             } else {
@@ -416,7 +414,7 @@ struct BookingRowCard: View {
             )
         }
         .padding(16)
-        .background(Color(.systemBackground))
+        .background(Color(.tertiarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
     }

@@ -167,22 +167,60 @@ final class BookingsViewModel: ObservableObject {
     private func loadBookings() async {
         isLoading = true
         errorMessage = nil
-        
-        do {
-            let response = try await apiService.get(
-                endpoint: .artistBookings(status: nil, page: 1, artistId: nil),
-                responseType: ArtistBookingsResponseDTO.self
-            )
-            
-            self.bookings = response.bookings.map { $0.toDomainModel() }
-            applyFilter()
-            
-        } catch {
-            self.errorMessage = error.localizedDescription
-            loadMockData()
+        defer { isLoading = false }
+
+        guard let url = URL(string: APIConfig.currentURL + APIEndpoint.artistBookings(status: nil, page: 1, artistId: nil).path) else {
+            errorMessage = "URL inválida"; return
         }
-        
-        isLoading = false
+        var req = URLRequest(url: url)
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = APIService.shared.authToken {
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        } else {
+            print("⚠️ loadBookings: sin token de autenticación")
+        }
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: req)
+
+            if let http = response as? HTTPURLResponse {
+                print("📨 GET /artists/dashboard/me/bookings → HTTP \(http.statusCode)")
+                if http.statusCode == 401 {
+                    errorMessage = "Sesión expirada. Vuelve a iniciar sesión."; return
+                }
+                if http.statusCode >= 400 {
+                    let raw = String(data: data, encoding: .utf8) ?? "(sin cuerpo)"
+                    print("❌ Bookings error body: \(raw)")
+                    errorMessage = "Error del servidor (\(http.statusCode))"; return
+                }
+            }
+
+            if let raw = String(data: data, encoding: .utf8) {
+                print("📦 Bookings raw JSON (primeros 800 chars): \(raw.prefix(800))")
+            }
+
+            let decoder = JSONDecoder()
+            // Intentar estructura envuelta { bookings: [...], total:, page:, totalPages: }
+            if let wrapped = try? decoder.decode(ArtistBookingsResponseDTO.self, from: data) {
+                print("✅ Bookings decode OK (wrapped) — \(wrapped.bookings.count) reservas")
+                self.bookings = wrapped.bookings.map { $0.toDomainModel() }
+                applyFilter(); return
+            }
+            // Fallback: array directo
+            if let dtos = try? decoder.decode([BookingDTO].self, from: data) {
+                print("✅ Bookings decode OK (array) — \(dtos.count) reservas")
+                self.bookings = dtos.map { $0.toDomainModel() }
+                applyFilter(); return
+            }
+
+            let rawStr = String(data: data, encoding: .utf8) ?? "(no legible)"
+            print("❌ Bookings decode FAILED. JSON: \(rawStr)")
+            errorMessage = "Respuesta inesperada del servidor. Revisa los logs."
+
+        } catch {
+            print("❌ Bookings network error: \(error)")
+            errorMessage = error.localizedDescription
+        }
     }
     
     func updateFilter(_ filter: BookingFilter) {
@@ -333,20 +371,129 @@ final class CalendarViewModel: ObservableObject {
     
     func setModelContext(_ context: ModelContext) {
         self.modelContext = context
-        refreshData()
+        Task { await refreshDataAsync() }
     }
-    
+
     func refreshData() {
+        Task { await refreshDataAsync() }
+    }
+
+    @MainActor
+    func refreshDataAsync() async {
         isLoading = true
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            self.loadMockAvailability()
-            self.isLoading = false
-        }
+        loadMockAvailability()          // base de disponibilidad inicial
+        await loadBlockedSlots()        // superpone bloques reales del backend
+        isLoading = false
     }
     
     func updateSelectedDate(_ date: Date) {
         selectedDate = date
+    }
+    
+    @MainActor
+    func blockTimeSlot(date: Date, reason: String) async {
+        guard let artistId = AuthService.shared.artistBackendId else {
+            print("⚠️ blockTimeSlot: artistBackendId no disponible aún (el perfil no se ha cargado)")
+            return
+        }
+        isLoading = true
+
+        // El backend almacena rangos — bloqueamos el día completo (00:00 → 23:59:59)
+        let cal = Calendar.current
+        let dayStart = cal.startOfDay(for: date)
+        let dayEnd = cal.date(bySettingHour: 23, minute: 59, second: 59, of: dayStart) ?? dayStart
+
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime]
+
+        let body = CreateBlockedSlotRequest(
+            artistId: artistId,
+            startTime: iso.string(from: dayStart),
+            endTime: iso.string(from: dayEnd),
+            reason: reason.isEmpty ? nil : reason,
+            isRecurring: false
+        )
+
+        do {
+            let _ = try await APIService.shared.post(
+                endpoint: .createBlockedSlot,
+                body: body,
+                responseType: BlockedSlotDTO.self
+            )
+            print("✅ Slot bloqueado exitosamente")
+            await loadBlockedSlots()
+        } catch {
+            print("❌ Error bloqueando slot: \(error)")
+        }
+        isLoading = false
+    }
+
+    @MainActor
+    func unblockSlot(slotId: String) async {
+        isLoading = true
+        do {
+            let _ = try await APIService.shared.request(
+                endpoint: .deleteBlockedSlot(slotId),
+                method: .DELETE,
+                responseType: EmptyResponseDTO.self
+            )
+            print("✅ Slot desbloqueado exitosamente")
+            await loadBlockedSlots()
+        } catch {
+            print("❌ Error desbloqueando slot: \(error)")
+        }
+        isLoading = false
+    }
+
+    @MainActor
+    private func loadBlockedSlots() async {
+        guard let artistId = AuthService.shared.artistBackendId else {
+            print("⚠️ loadBlockedSlots: artistBackendId no disponible — esperando carga de perfil")
+            return
+        }
+
+        let isoFull = ISO8601DateFormatter()
+        isoFull.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let isoBasic = ISO8601DateFormatter()
+        let cal = Calendar.current
+
+        do {
+            // El backend devuelve el array directamente (no wrapped)
+            let slots = try await APIService.shared.get(
+                endpoint: .getBlockedSlots(artistId: artistId),
+                responseType: [BlockedSlotDTO].self
+            )
+
+            for slot in slots {
+                // Parsear startTime; cubrir días completos afectados por el rango
+                guard let start = isoFull.date(from: slot.startTime)
+                                ?? isoBasic.date(from: slot.startTime),
+                      let end   = isoFull.date(from: slot.endTime)
+                                ?? isoBasic.date(from: slot.endTime)
+                else { continue }
+
+                // Iterar cada día dentro del rango bloqueado
+                var current = cal.startOfDay(for: start)
+                while current <= cal.startOfDay(for: end) {
+                    if let existing = availability[current] {
+                        availability[current] = existing.map {
+                            TimeSlot(time: $0.time, isAvailable: false, isBooked: $0.isBooked)
+                        }
+                    } else {
+                        availability[current] = defaultSlots(for: current, blocked: true)
+                    }
+                    current = cal.date(byAdding: .day, value: 1, to: current) ?? current
+                }
+            }
+        } catch {
+            print("⚠️ loadBlockedSlots error (usando mock): \(error)")
+        }
+    }
+
+    private func defaultSlots(for date: Date, blocked: Bool) -> [TimeSlot] {
+        ["9:00 AM","10:30 AM","12:00 PM","2:00 PM","3:30 PM","5:00 PM"].map {
+            TimeSlot(time: $0, isAvailable: !blocked, isBooked: false)
+        }
     }
     
     func updateCurrentMonth(_ month: Date) {
@@ -402,144 +549,254 @@ final class MessagesViewModel: ObservableObject {
     @Published var searchText = ""
     @Published var isLoading = false
     @Published var errorMessage: String?
-    
+
     struct ConversationItem: Identifiable {
-        let id = UUID()
+        /// Real backend conversation ID (string)
+        let conversationId: String
+        /// Stable UUID derived from conversationId — avoids re-rendering on refresh
+        let stableId: UUID
+        var id: UUID { stableId }
+
         let clientName: String
         let clientEmail: String
         let lastMessage: String
         let timestamp: Date
         let unreadCount: Int
         let isOnline: Bool
+        var status: String       // ACTIVE, PENDING, CLOSED
         var messages: [MessageItem]
     }
-    
+
     struct MessageItem: Identifiable {
-        let id = UUID()
+        let id: UUID
         let content: String
         let isFromArtist: Bool
         let timestamp: Date
         let isRead: Bool
+
+        init(content: String, isFromArtist: Bool, timestamp: Date, isRead: Bool) {
+            self.id = UUID()
+            self.content = content
+            self.isFromArtist = isFromArtist
+            self.timestamp = timestamp
+            self.isRead = isRead
+        }
     }
-    
+
     private var modelContext: ModelContext?
     private let apiService = APIService.shared
-    
+
     init() {
-        Task {
-            await loadConversations()
-        }
+        Task { await loadConversations() }
     }
-    
+
     func setModelContext(_ context: ModelContext) {
         self.modelContext = context
-        Task {
-            await refreshData()
-        }
+        Task { await refreshData() }
     }
-    
-    func refreshData() async {
-        await loadConversations()
-    }
-    
+
+    func refreshData() async { await loadConversations() }
+
+
+    // MARK: - Load conversations
+
     @MainActor
-    private func loadConversations() async {
+    func loadConversations() async {
         isLoading = true
         errorMessage = nil
-        
+        defer { isLoading = false }
+
+        // Hacemos la petición cruda para poder loggear la respuesta y diagnosticar
+        guard let url = URL(string: APIConfig.currentURL + APIEndpoint.conversations.path) else {
+            errorMessage = "URL inválida"
+            return
+        }
+        var req = URLRequest(url: url)
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = APIService.shared.authToken {
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
         do {
-            let response = try await apiService.get(
-                endpoint: .conversations,
-                responseType: [ConversationDTO].self
-            )
-            
-            self.conversations = response.map { dto in
-                let conversation = dto.toDomainModel()
-                return conversation
+            let (data, response) = try await URLSession.shared.data(for: req)
+
+            if let http = response as? HTTPURLResponse {
+                print("📨 GET /chat/conversations → HTTP \(http.statusCode)")
+                if http.statusCode == 401 {
+                    self.errorMessage = "Sesión expirada. Vuelve a iniciar sesión."
+                    return
+                }
+                if http.statusCode >= 400 {
+                    let raw = String(data: data, encoding: .utf8) ?? "(sin cuerpo)"
+                    print("❌ Conversations error body: \(raw)")
+                    self.errorMessage = "Error del servidor (\(http.statusCode))"
+                    return
+                }
             }
-            filterConversations()
-            
+
+            // Log del JSON crudo para diagnosticar problemas de decode
+            if let raw = String(data: data, encoding: .utf8) {
+                print("📦 Conversations raw JSON (primeros 600 chars): \(raw.prefix(600))")
+            }
+
+            let decoder = JSONDecoder()
+
+            // Intentar decode como objeto envuelto { conversations: [...] }
+            if let wrapped = try? decoder.decode(ConversationsResponseDTO.self, from: data) {
+                print("✅ Decode OK (wrapped) — \(wrapped.conversations.count) conversaciones")
+                self.conversations = wrapped.conversations.map { $0.toDomainModel() }
+                filterConversations()
+                return
+            }
+
+            // Fallback: array directo
+            if let dtos = try? decoder.decode([ConversationDTO].self, from: data) {
+                print("✅ Decode OK (array) — \(dtos.count) conversaciones")
+                self.conversations = dtos.map { $0.toDomainModel() }
+                filterConversations()
+                return
+            }
+
+            // Ambos fallaron — mostrar error descriptivo
+            let rawStr = String(data: data, encoding: .utf8) ?? "(datos no legibles)"
+            print("❌ Conversations decode FAILED. JSON: \(rawStr)")
+            self.errorMessage = "Respuesta inesperada del servidor. Revisa los logs de Xcode."
+
         } catch {
+            print("❌ Conversations network error: \(error)")
             self.errorMessage = error.localizedDescription
-            // Fallback to mock data if API fails
-            loadMockConversations()
-        }
-        
-        isLoading = false
-    }
-    
-    func updateSearchText(_ text: String) {
-        searchText = text
-        filterConversations()
-    }
-    
-    func sendMessage(_ content: String, to conversationId: UUID) {
-        Task {
-            await sendMessageAPI(content, to: conversationId)
         }
     }
-    
-    @MainActor
-    private func sendMessageAPI(_ content: String, to conversationId: UUID) async {
+
+    // MARK: - Load messages for a conversation
+
+    /// Fetches the message history for `conversationId` from the backend.
+    func loadMessages(for conversationId: String) async -> [MessageItem] {
+        var messages: [MessageItem] = []
         do {
-            let request = SendMessageRequest(conversationId: conversationId.uuidString, content: content, type: "TEXT")
+            if let wrapped = try? await apiService.get(
+                endpoint: .conversationMessages(conversationId, page: nil),
+                responseType: MessagesResponseDTO.self
+            ) {
+                messages = wrapped.messages.map { $0.toDomainModel() }
+            } else {
+                let dtos = try await apiService.get(
+                    endpoint: .conversationMessages(conversationId, page: nil),
+                    responseType: [MessageDTO].self
+                )
+                messages = dtos.map { $0.toDomainModel() }
+            }
+        } catch {
+            print("⚠️ loadMessages error for \(conversationId): \(error)")
+        }
+        // Marcar conversación como leída (igual que hace el cliente)
+        try? await apiService.request(
+            endpoint: .markConversationRead(conversationId),
+            method: .PATCH,
+            responseType: EmptyResponseDTO.self
+        )
+        // Actualizar unreadCount a 0 en la lista local
+        if let idx = conversations.firstIndex(where: { $0.conversationId == conversationId }) {
+            let c = conversations[idx]
+            conversations[idx] = ConversationItem(
+                conversationId: c.conversationId,
+                stableId: c.stableId,
+                clientName: c.clientName,
+                clientEmail: c.clientEmail,
+                lastMessage: c.lastMessage,
+                timestamp: c.timestamp,
+                unreadCount: 0,
+                isOnline: c.isOnline,
+                status: c.status,
+                messages: c.messages
+            )
+        }
+        return messages
+    }
+
+    // MARK: - Send message
+
+    func sendMessage(_ content: String, conversationId: String) {
+        Task { await sendMessageAPI(content, conversationId: conversationId) }
+    }
+
+    @MainActor
+    private func sendMessageAPI(_ content: String, conversationId: String) async {
+        let request = SendMessageRequest(conversationId: conversationId, content: content, type: "TEXT")
+        do {
             let response = try await apiService.post(
                 endpoint: .sendMessage,
                 body: request,
                 responseType: MessageDTO.self
             )
-            
-            if let index = conversations.firstIndex(where: { $0.id == conversationId }) {
-                let newMessage = response.toDomainModel()
+            let newMessage = response.toDomainModel()
+            if let index = conversations.firstIndex(where: { $0.conversationId == conversationId }) {
                 conversations[index].messages.append(newMessage)
                 filterConversations()
             }
-            
         } catch {
             self.errorMessage = error.localizedDescription
         }
     }
-    
-    // Keep as fallback
+
+    // MARK: - Search
+
+    func updateSearchText(_ text: String) {
+        searchText = text
+        filterConversations()
+    }
+
+    private func filterConversations() {
+        if searchText.isEmpty {
+            filteredConversations = conversations
+        } else {
+            filteredConversations = conversations.filter {
+                $0.clientName.localizedCaseInsensitiveContains(searchText) ||
+                $0.lastMessage.localizedCaseInsensitiveContains(searchText)
+            }
+        }
+    }
+
+    // MARK: - Mock fallback
+
     private func loadMockConversations() {
-        let calendar = Calendar.current
-        
+        let cal = Calendar.current
         conversations = [
             ConversationItem(
+                conversationId: "mock-1",
+                stableId: UUID(),
                 clientName: "María García",
                 clientEmail: "maria.garcia@email.com",
                 lastMessage: "¡Perfecto! Nos vemos mañana a las 10:00",
                 timestamp: Date(),
                 unreadCount: 0,
                 isOnline: true,
+                status: "ACTIVE",
                 messages: [
-                    MessageItem(content: "Hola, ¿tienes disponibilidad para mañana?", isFromArtist: false, timestamp: calendar.date(byAdding: .hour, value: -2, to: Date()) ?? Date(), isRead: true),
-                    MessageItem(content: "¡Hola! Sí, tengo disponibilidad. ¿A qué hora te vendría bien?", isFromArtist: true, timestamp: calendar.date(byAdding: .hour, value: -1, to: Date()) ?? Date(), isRead: true)
+                    MessageItem(content: "Hola, ¿tienes disponibilidad para mañana?",
+                                isFromArtist: false,
+                                timestamp: cal.date(byAdding: .hour, value: -2, to: Date()) ?? Date(),
+                                isRead: true),
+                    MessageItem(content: "¡Hola! Sí, tengo disponibilidad. ¿A qué hora te vendría bien?",
+                                isFromArtist: true,
+                                timestamp: cal.date(byAdding: .hour, value: -1, to: Date()) ?? Date(),
+                                isRead: true)
                 ]
             ),
             ConversationItem(
+                conversationId: "mock-2",
+                stableId: UUID(),
                 clientName: "Ana López",
                 clientEmail: "ana.lopez@email.com",
                 lastMessage: "¿Podrías confirmar la cita?",
-                timestamp: calendar.date(byAdding: .hour, value: -2, to: Date()) ?? Date(),
+                timestamp: cal.date(byAdding: .hour, value: -2, to: Date()) ?? Date(),
                 unreadCount: 2,
                 isOnline: false,
+                status: "PENDING",
                 messages: []
             )
         ]
-        
         filterConversations()
-    }
-    
-    private func filterConversations() {
-        if searchText.isEmpty {
-            filteredConversations = conversations
-        } else {
-            filteredConversations = conversations.filter { conversation in
-                conversation.clientName.localizedCaseInsensitiveContains(searchText) ||
-                conversation.lastMessage.localizedCaseInsensitiveContains(searchText)
-            }
-        }
     }
 }
 
@@ -591,7 +848,10 @@ final class ProfileViewModel: ObservableObject {
                 responseType: ArtistProfileResponseDTO.self
             )
             let profile = profileResp.artist
-            
+
+            // Persistir el artistId del backend para que otros ViewModels lo usen sin llamadas extra
+            AuthService.shared.artistBackendId = profile.id
+
             // 2. Cargar stats en paralelo con los servicios del artista
             async let statsTask = apiService.get(
                 endpoint: .artistStats,

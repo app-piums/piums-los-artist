@@ -43,9 +43,11 @@ struct ContentView: View {
         ZStack {
             Color.piumsOrange.ignoresSafeArea()
             VStack(spacing: 20) {
-                Text("Piums")
-                    .font(.system(size: 42, weight: .heavy, design: .rounded))
-                    .foregroundColor(.white)
+                Image("PiumsLogo")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(height: 76)
+                    .colorMultiply(.white)
                 Text("Panel de Artistas")
                     .font(.subheadline.weight(.medium))
                     .foregroundColor(.white.opacity(0.75))

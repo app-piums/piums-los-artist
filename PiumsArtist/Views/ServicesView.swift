@@ -12,31 +12,55 @@ import Combine
 struct ServicesView: View {
     @StateObject private var viewModel = ServicesViewModel()
     @State private var showAddService = false
+    @State private var showEditService = false
+    @State private var selectedService: Service?
+    @State private var showDeleteConfirmation = false
+    @State private var serviceToDelete: Service?
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                topBar.padding(.horizontal, 20).padding(.top, 8)
+        ZStack {
+            Color(.secondarySystemGroupedBackground).ignoresSafeArea()
+            ScrollView {
+                VStack(spacing: 0) {
+                    topBar.padding(.horizontal, 20).padding(.top, 8)
 
-                headerSection.padding(.horizontal, 20).padding(.top, 16)
+                    headerSection.padding(.horizontal, 20).padding(.top, 16)
 
-                if viewModel.isLoading {
-                    loadingState.padding(.top, 60)
-                } else if viewModel.services.isEmpty {
-                    emptyState.padding(.top, 60)
-                } else {
-                    servicesList.padding(.horizontal, 16).padding(.top, 16)
+                    if viewModel.isLoading {
+                        loadingState.padding(.top, 60)
+                    } else if viewModel.services.isEmpty {
+                        emptyState.padding(.top, 60)
+                    } else {
+                        servicesList.padding(.horizontal, 16).padding(.top, 16)
 
-                    // Info banner (como en la web)
-                    infoBanner.padding(.horizontal, 16).padding(.top, 20)
+                        // Info banner (como en la web)
+                        infoBanner.padding(.horizontal, 16).padding(.top, 20)
+                    }
+
+                    Spacer(minLength: 120)
                 }
-
-                Spacer(minLength: 120)
             }
         }
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
         .refreshable { await viewModel.refreshData() }
         .sheet(isPresented: $showAddService) { addServiceSheet }
+        .sheet(isPresented: $showEditService) {
+            if let service = selectedService {
+                editServiceSheet(service)
+            }
+        }
+        .confirmationDialog("¿Eliminar este servicio?",
+                            isPresented: $showDeleteConfirmation,
+                            titleVisibility: .visible) {
+            Button("Eliminar", role: .destructive) {
+                if let service = serviceToDelete {
+                    Task { await viewModel.deleteService(service) }
+                }
+            }
+            Button("Cancelar", role: .cancel) { }
+        } message: {
+            Text("Esta acción no se puede deshacer")
+        }
     }
 
     // MARK: - Top Bar
@@ -45,9 +69,10 @@ struct ServicesView: View {
             PiumsAvatarView(name: "A", imageURL: nil, size: 38,
                             gradientColors: [.piumsOrange, .piumsAccent])
             Spacer()
-            Text("Piums")
-                .font(.system(size: 20, weight: .heavy, design: .rounded))
-                .foregroundColor(.piumsOrange)
+            Image("PiumsLogo")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(height: 40)
             Spacer()
             Button { } label: {
                 Image(systemName: "gearshape.fill").font(.title3).foregroundColor(.secondary)
@@ -149,7 +174,10 @@ struct ServicesView: View {
             // ── Row 4: Action buttons ──
             HStack(spacing: 8) {
                 // Editar
-                Button { } label: {
+                Button {
+                    selectedService = service
+                    showEditService = true
+                } label: {
                     HStack(spacing: 5) {
                         Text("✏️")
                             .font(.caption2)
@@ -164,7 +192,11 @@ struct ServicesView: View {
                 }
 
                 // Desactivar / Activar
-                Button { } label: {
+                Button {
+                    Task {
+                        await viewModel.toggleServiceStatus(service)
+                    }
+                } label: {
                     HStack(spacing: 5) {
                         Text("⏸")
                             .font(.caption2)
@@ -179,7 +211,10 @@ struct ServicesView: View {
                 }
 
                 // Eliminar
-                Button { } label: {
+                Button {
+                    serviceToDelete = service
+                    showDeleteConfirmation = true
+                } label: {
                     Image(systemName: "trash.fill")
                         .font(.caption)
                         .foregroundColor(.piumsError)
@@ -246,27 +281,18 @@ struct ServicesView: View {
 
     // MARK: - Add Service Sheet
     private var addServiceSheet: some View {
-        NavigationView {
-            VStack(spacing: 20) {
-                Image(systemName: "bag.badge.plus")
-                    .font(.system(size: 50)).foregroundColor(.piumsOrange)
-                Text("Nuevo servicio").font(.title3.weight(.semibold))
-                Text("Crea un servicio que los clientes puedan reservar desde tu perfil público.")
-                    .font(.subheadline).foregroundColor(.secondary)
-                    .multilineTextAlignment(.center).padding(.horizontal)
+        ServiceFormView(mode: .create) {
+            showAddService = false
+            Task { await viewModel.refreshData() }
+        }
+    }
 
-                VStack(spacing: 16) {
-                    Text("🚧 Próximamente").font(.headline)
-                    Text("El formulario de creación se implementará en la siguiente versión.")
-                        .font(.subheadline).foregroundColor(.secondary).multilineTextAlignment(.center)
-                }
-                .padding().background(Color(.systemGray6)).cornerRadius(12).padding(.horizontal)
-                Spacer()
-            }
-            .padding(.top, 30)
-            .navigationTitle("Crear servicio").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { showAddService = false } } }
-        }.presentationDetents([.large])
+    // MARK: - Edit Service Sheet
+    private func editServiceSheet(_ service: Service) -> some View {
+        ServiceFormView(mode: .edit(service)) {
+            showEditService = false
+            Task { await viewModel.refreshData() }
+        }
     }
 
     // MARK: - Helpers
@@ -292,8 +318,12 @@ struct ServicesView: View {
 @MainActor
 final class ServicesViewModel: ObservableObject {
     @Published var services: [Service] = []
+    @Published var categories: [ServiceCategoryItemDTO] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
+
+    /// artistId del backend — cacheado para no repetir la llamada al perfil en cada operación
+    private(set) var cachedArtistId: String = ""
 
     private let apiService = APIService.shared
 
@@ -310,17 +340,31 @@ final class ServicesViewModel: ObservableObject {
         errorMessage = nil
 
         do {
-            let profileResp = try await apiService.get(
-                endpoint: .artistDashboard,
-                responseType: ArtistProfileResponseDTO.self
-            )
-            let artistId = profileResp.artist.id
+            // Usar el artistId persistido si ya está disponible; si no, obtenerlo del perfil
+            let artistId: String
+            if let saved = AuthService.shared.artistBackendId, !saved.isEmpty {
+                artistId = saved
+            } else {
+                let profileResp = try await apiService.get(
+                    endpoint: .artistDashboard,
+                    responseType: ArtistProfileResponseDTO.self
+                )
+                artistId = profileResp.artist.id
+                AuthService.shared.artistBackendId = artistId
+            }
+            cachedArtistId = artistId
 
-            let servicesResp = try await apiService.get(
+            async let servicesTask = apiService.get(
                 endpoint: .catalogServices(artistId: artistId, category: nil),
                 responseType: ServicesResponseDTO.self
             )
+            async let categoriesTask = apiService.get(
+                endpoint: .serviceCategories,
+                responseType: ServiceCategoriesResponseDTO.self
+            )
+            let (servicesResp, cats) = try await (servicesTask, categoriesTask)
             self.services = servicesResp.services.map { $0.toDomainModel() }
+            self.categories = cats
         } catch {
             self.errorMessage = error.localizedDescription
             loadMockData()
@@ -331,6 +375,264 @@ final class ServicesViewModel: ObservableObject {
 
     private func loadMockData() {
         services = Service.previewServices
+    }
+
+    // MARK: - CRUD
+
+    func deleteService(_ service: Service) async {
+        guard !service.remoteId.isEmpty else {
+            print("⚠️ deleteService: remoteId vacío — el servicio no tiene ID del backend")
+            return
+        }
+        isLoading = true
+        do {
+            let _ = try await apiService.request(
+                endpoint: .deleteService(service.remoteId),
+                method: .DELETE,
+                responseType: EmptyResponseDTO.self
+            )
+            print("✅ Servicio eliminado")
+            await loadServices()
+        } catch {
+            self.errorMessage = error.localizedDescription
+        }
+        isLoading = false
+    }
+
+    func toggleServiceStatus(_ service: Service) async {
+        guard !service.remoteId.isEmpty else { return }
+        isLoading = true
+        do {
+            let _ = try await apiService.request(
+                endpoint: .toggleServiceStatus(service.remoteId),
+                method: .PATCH,
+                responseType: ServiceDTO.self
+            )
+            await loadServices()
+        } catch {
+            self.errorMessage = error.localizedDescription
+        }
+        isLoading = false
+    }
+
+    func createService(name: String, description: String, categoryId: String,
+                       pricingType: String, priceQuetzales: Double, durationMin: Int) async throws {
+        let artistId = cachedArtistId.isEmpty
+            ? (AuthService.shared.artistBackendId ?? "") : cachedArtistId
+        guard !artistId.isEmpty else {
+            throw NSError(domain: "ServicesVM", code: 0,
+                          userInfo: [NSLocalizedDescriptionKey: "Perfil de artista no cargado aún. Vuelve a intentarlo."])
+        }
+        // Generar slug a partir del nombre
+        let slug = makeSlug(from: name) + "-" + String(Int.random(in: 1000...9999))
+        let body = CreateServiceRequest(
+            artistId: artistId,
+            name: name,
+            slug: slug,
+            description: description.count >= 10 ? description : description + String(repeating: ".", count: max(0, 10 - description.count)),
+            categoryId: categoryId,
+            pricingType: pricingType,
+            basePrice: Int(priceQuetzales * 100),
+            currency: "GTQ",
+            durationMin: durationMin
+        )
+        let _ = try await apiService.post(endpoint: .createService, body: body, responseType: ServiceDTO.self)
+        await loadServices()
+    }
+
+    func updateServiceFields(_ service: Service, name: String, description: String,
+                              categoryId: String, pricingType: String,
+                              priceQuetzales: Double, durationMin: Int) async throws {
+        let artistId = cachedArtistId.isEmpty
+            ? (AuthService.shared.artistBackendId ?? "") : cachedArtistId
+        let slug = service.slug.isEmpty ? makeSlug(from: name) : service.slug
+        let body = UpdateServiceRequest(
+            artistId: artistId,
+            name: name,
+            slug: slug,
+            description: description.count >= 10 ? description : description + String(repeating: ".", count: max(0, 10 - description.count)),
+            categoryId: categoryId.isEmpty ? service.categoryId : categoryId,
+            pricingType: pricingType,
+            basePrice: Int(priceQuetzales * 100),
+            currency: "GTQ",
+            durationMin: durationMin
+        )
+        let _ = try await apiService.put(
+            endpoint: .updateService(service.remoteId.isEmpty ? service.id.uuidString : service.remoteId),
+            body: body,
+            responseType: ServiceDTO.self
+        )
+        await loadServices()
+    }
+
+    // MARK: - Helpers
+
+    private func makeSlug(from name: String) -> String {
+        let normalized = name
+            .lowercased()
+            .folding(options: .diacriticInsensitive, locale: .current)
+        let slug = normalized
+            .components(separatedBy: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-")).inverted)
+            .joined(separator: "-")
+            .components(separatedBy: "--").joined(separator: "-")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        return slug.isEmpty ? "servicio" : slug
+    }
+}
+
+// MARK: - Service Form View (Crear / Editar)
+
+struct ServiceFormView: View {
+    enum Mode {
+        case create
+        case edit(Service)
+    }
+
+    let mode: Mode
+    let onDone: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var vm: ServicesViewModel = ServicesViewModel()
+
+    @State private var name: String = ""
+    @State private var description: String = ""
+    @State private var pricingType: String = "FIXED"
+    @State private var priceText: String = ""
+    @State private var durationMin: Int = 60
+    @State private var selectedCategoryId: String = ""
+
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+
+    private let pricingOptions: [(String, String)] = [
+        ("FIXED",       "Precio fijo"),
+        ("HOURLY",      "Por hora"),
+        ("PER_SESSION", "Por sesión"),
+        ("CUSTOM",      "Personalizado")
+    ]
+
+    private var isEditing: Bool {
+        if case .edit = mode { return true }
+        return false
+    }
+
+    var body: some View {
+        NavigationView {
+            Form {
+                // Información básica
+                Section("Información del servicio") {
+                    TextField("Nombre del servicio *", text: $name)
+                    TextField("Descripción (mínimo 10 caracteres)", text: $description, axis: .vertical)
+                        .lineLimit(3...5)
+                }
+
+                // Categoría
+                Section("Categoría") {
+                    if vm.categories.isEmpty {
+                        HStack {
+                            ProgressView().scaleEffect(0.8)
+                            Text("Cargando categorías…").foregroundColor(.secondary).font(.subheadline)
+                        }
+                    } else {
+                        Picker("Categoría *", selection: $selectedCategoryId) {
+                            Text("Seleccionar…").tag("")
+                            ForEach(vm.categories, id: \.id) { cat in
+                                Text(cat.name).tag(cat.id)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
+                }
+
+                // Precio
+                Section("Precio") {
+                    Picker("Tipo de precio", selection: $pricingType) {
+                        ForEach(pricingOptions, id: \.0) { opt in
+                            Text(opt.1).tag(opt.0)
+                        }
+                    }
+                    HStack {
+                        Text("Q")
+                            .foregroundColor(.secondary)
+                        TextField("0.00", text: $priceText)
+                            .keyboardType(.decimalPad)
+                    }
+                }
+
+                // Duración
+                Section("Duración estimada") {
+                    Stepper("\(durationMin) min", value: $durationMin, in: 15...480, step: 15)
+                }
+
+                // Error
+                if let msg = errorMessage {
+                    Section {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.piumsError)
+                            Text(msg).font(.caption).foregroundColor(.piumsError)
+                        }
+                    }
+                    .listRowSeparator(.hidden)
+                }
+            }
+            .navigationTitle(isEditing ? "Editar servicio" : "Nuevo servicio")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancelar") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isSaving ? "Guardando…" : "Guardar") {
+                        Task { await save() }
+                    }
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.piumsOrange)
+                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty
+                              || selectedCategoryId.isEmpty
+                              || isSaving)
+                }
+            }
+        }
+        .task { prefill() }
+        .presentationDetents([.large])
+    }
+
+    private func prefill() {
+        if case .edit(let service) = mode {
+            name = service.name
+            description = service.serviceDescription
+            pricingType = service.pricingType.uppercased()
+            priceText = service.price > 0 ? String(format: "%.2f", service.price) : ""
+            durationMin = service.duration
+            selectedCategoryId = service.categoryId
+        }
+    }
+
+    private func save() async {
+        isSaving = true
+        errorMessage = nil
+        let price = Double(priceText.replacingOccurrences(of: ",", with: ".")) ?? 0
+        do {
+            if case .edit(let service) = mode {
+                try await vm.updateServiceFields(
+                    service, name: name, description: description,
+                    categoryId: selectedCategoryId,
+                    pricingType: pricingType, priceQuetzales: price, durationMin: durationMin
+                )
+            } else {
+                try await vm.createService(
+                    name: name, description: description,
+                    categoryId: selectedCategoryId,
+                    pricingType: pricingType, priceQuetzales: price, durationMin: durationMin
+                )
+            }
+            dismiss()
+            onDone()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isSaving = false
     }
 }
 

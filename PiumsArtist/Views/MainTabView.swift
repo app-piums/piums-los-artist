@@ -10,44 +10,46 @@ import SwiftUI
 struct MainTabView: View {
     @State private var selectedTab = 0
 
+    init() {
+        let bg = UIColor.systemGroupedBackground
+        UINavigationBar.appearance().backgroundColor = bg
+        UINavigationBar.appearance().barTintColor = bg
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = bg
+        UINavigationBar.appearance().standardAppearance = appearance
+        UINavigationBar.appearance().scrollEdgeAppearance = appearance
+        UINavigationBar.appearance().compactAppearance = appearance
+    }
+
     var body: some View {
-        TabView(selection: $selectedTab) {
-            DashboardView()
-                .tabItem {
-                    Image(systemName: selectedTab == 0 ? "house.fill" : "house")
-                    Text("Inicio")
-                }
-                .tag(0)
+        ZStack {
+            Color(.secondarySystemGroupedBackground).ignoresSafeArea()
+            TabView(selection: $selectedTab) {
+                NavigationStack { DashboardView() }
+                    .tabItem { Label("Inicio", systemImage: "house.fill") }
+                    .tag(0)
 
-            BookingsView()
-                .tabItem {
-                    Image(systemName: "doc.text")
-                    Text("Reservas")
-                }
-                .tag(1)
+                NavigationStack { BookingsView() }
+                    .tabItem { Label("Reservas", systemImage: "doc.text.fill") }
+                    .tag(1)
 
-            CalendarView()
-                .tabItem {
-                    Image(systemName: selectedTab == 2 ? "calendar" : "calendar")
-                    Text("Agenda")
-                }
-                .tag(2)
+                NavigationStack { CalendarView() }
+                    .tabItem { Label("Agenda", systemImage: "calendar") }
+                    .tag(2)
 
-            MessagesView()
-                .tabItem {
-                    Image(systemName: selectedTab == 3 ? "message.fill" : "message")
-                    Text("Mensajes")
-                }
-                .tag(3)
+                NavigationStack { MessagesView() }
+                    .tabItem { Label("Mensajes", systemImage: "message.fill") }
+                    .tag(3)
 
-            MoreMenuView()
-                .tabItem {
-                    Image(systemName: selectedTab == 4 ? "line.3.horizontal" : "line.3.horizontal")
-                    Text("Más")
-                }
-                .tag(4)
+                NavigationStack { MoreMenuView() }
+                    .tabItem { Label("Más", systemImage: "line.3.horizontal") }
+                    .tag(4)
+            }
+            .tint(.piumsOrange)
+            .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+            .toolbarBackground(.visible, for: .tabBar)
         }
-        .tint(.piumsOrange)
     }
 }
 

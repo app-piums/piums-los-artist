@@ -64,6 +64,10 @@ enum APIEndpoint {
     // Absences
     case createArtistProfile
     case setArtistAvailability
+    case getAvailability
+    case getBlockedSlots(artistId: String)
+    case createBlockedSlot
+    case deleteBlockedSlot(String)
     case artistAbsences
     case createAbsence
     case deleteAbsence(String)
@@ -74,6 +78,7 @@ enum APIEndpoint {
     case serviceById(String)
     case updateService(String)
     case deleteService(String)
+    case toggleServiceStatus(String)
     case serviceCategories
     
     // Bookings
@@ -117,10 +122,25 @@ enum APIEndpoint {
     case conversationMessages(String, page: Int? = nil)
     case sendMessage
     case markMessageRead(String)
+    case markConversationRead(String)
     
+    // Reviews (nuevos)
+    case reviewsList(artistId: String, page: Int?)
+    case reportReview(String)
+
+    // Disputes
+    case myDisputes
+    case disputeById(String)
+    case addDisputeMessage(String)
+
+    // Verification / Auth Profile
+    case authMe
+    case authProfile
+    case uploadDocument(folder: String)
+
     // Health
     case health
-    
+
     var path: String {
         switch self {
         // Authentication
@@ -207,6 +227,14 @@ enum APIEndpoint {
             return "/artists/dashboard/me/profile"
         case .setArtistAvailability:
             return "/artists/dashboard/me/availability"
+        case .getAvailability:
+            return "/artists/dashboard/me/availability"
+        case .getBlockedSlots(let artistId):
+            return "/artists/\(artistId)/blocked-slots"
+        case .createBlockedSlot:
+            return "/blocked-slots"
+        case .deleteBlockedSlot(let id):
+            return "/blocked-slots/\(id)"
             
         // Absences
         case .artistAbsences:
@@ -232,6 +260,8 @@ enum APIEndpoint {
             return "/catalog/services/\(id)"
         case .deleteService(let id):
             return "/catalog/services/\(id)"
+        case .toggleServiceStatus(let id):
+            return "/catalog/services/\(id)/toggle-status"
         case .serviceCategories:
             return "/catalog/categories"
             
@@ -287,7 +317,7 @@ enum APIEndpoint {
         case .deleteReview(let id):
             return "/reviews/\(id)"
         case .respondToReview(let id):
-            return "/reviews/\(id)/respond"
+            return "/reviews/reviews/\(id)/respond"
         case .markReviewHelpful(let id):
             return "/reviews/\(id)/helpful"
             
@@ -330,14 +360,41 @@ enum APIEndpoint {
         case .conversationById(let id):
             return "/chat/conversations/\(id)"
         case .conversationMessages(let id, let page):
-            var path = "/chat/conversations/\(id)/messages"
+            var path = "/chat/messages/\(id)"
             if let page = page { path += "?page=\(page)" }
             return path
         case .sendMessage:
             return "/chat/messages"
         case .markMessageRead(let id):
             return "/chat/messages/\(id)/read"
+        case .markConversationRead(let id):
+            return "/chat/conversations/\(id)/read"
             
+        // Reviews — el gateway enruta /reviews → reviews-service, que expone /reviews
+        case .reviewsList(let artistId, let page):
+            var path = "/reviews/reviews"
+            var params = ["artistId=\(artistId)"]
+            if let page = page { params.append("page=\(page)") }
+            return path + "?" + params.joined(separator: "&")
+        case .reportReview(let id):
+            return "/reviews/reviews/\(id)/report"
+
+        // Disputes
+        case .myDisputes:
+            return "/disputes/me"
+        case .disputeById(let id):
+            return "/disputes/\(id)"
+        case .addDisputeMessage(let id):
+            return "/disputes/\(id)/messages"
+
+        // Verification / Auth Profile
+        case .authMe:
+            return "/auth/me"
+        case .authProfile:
+            return "/auth/profile"
+        case .uploadDocument(let folder):
+            return "/users/documents/upload?folder=\(folder)"
+
         // Health
         case .health:
             return "/health"
@@ -557,6 +614,20 @@ final class APIService: ObservableObject {
         )
     }
     
+    func patch<T: Codable, U: Codable>(
+        endpoint: APIEndpoint,
+        body: U,
+        responseType: T.Type
+    ) async throws -> T {
+        let bodyData = try encoder.encode(body)
+        return try await request(
+            endpoint: endpoint,
+            method: .PATCH,
+            body: bodyData,
+            responseType: responseType
+        )
+    }
+
     func delete<T: Codable>(
         endpoint: APIEndpoint,
         responseType: T.Type

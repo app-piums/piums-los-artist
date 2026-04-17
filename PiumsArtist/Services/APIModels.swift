@@ -250,7 +250,8 @@ struct ArtistProfileResponseDTO: Codable {
 
 struct ArtistProfileDTO: Codable {
     let id: String
-    let userId: String?
+    let authId: String?        // ← campo real del backend (antes "userId")
+    let userId: String?        // alias por si algún endpoint lo devuelve así
     let email: String?
     let nombre: String?
     let artistName: String?
@@ -259,11 +260,13 @@ struct ArtistProfileDTO: Codable {
     let avatar: String?
     let coverPhoto: String?
     let category: String?
+    let categoryId: String?
     let specialties: [String]?
     let cityId: String?
     let city: String?
     let country: String?
-    let experienceYears: Int?
+    let yearsExperience: Int?  // ← campo real del backend (antes "experienceYears")
+    let experienceYears: Int?  // alias por si algún endpoint lo devuelve así
     let reviewsCount: Int?
     let bookingsCount: Int?
     let isVerified: Bool?
@@ -271,9 +274,15 @@ struct ArtistProfileDTO: Codable {
     let rating: Double?
     let imageUrl: String?
     let baseLocationLabel: String?
+    let baseLocationLat: Double?
+    let baseLocationLng: Double?
+    let coverageRadius: Int?
+    let currency: String?
     let socialLinks: SocialLinksDTO?
 
     var displayName: String { artistName ?? nombre ?? "Artista" }
+    var resolvedExperienceYears: Int { yearsExperience ?? experienceYears ?? 0 }
+    var resolvedAuthId: String? { authId ?? userId }
 }
 
 struct BookingLocationDTO: Codable {
@@ -369,10 +378,6 @@ struct CreateReviewRequest: Codable {
     let images: [String]?
 }
 
-struct RespondToReviewRequest: Codable {
-    let response: String
-}
-
 // MARK: - Notification DTOs
 struct NotificationDTO: Codable {
     let id: String
@@ -386,22 +391,29 @@ struct NotificationDTO: Codable {
 }
 
 // MARK: - Chat DTOs
+/// Estructura real del chat-service (GET /chat/conversations)
 struct ConversationDTO: Codable {
     let id: String
-    let participants: [String]
-    let lastMessage: MessageDTO?
-    let unreadCount: Int
-    let createdAt: String
-    let updatedAt: String
+    let userId: String?        // ID del cliente
+    let artistId: String?      // ID del artista
+    let bookingId: String?
+    let status: String?        // PENDING, ACTIVE, CLOSED
+    let lastMessageAt: String? // ISO timestamp del último mensaje
+    let unreadCount: Int?      // Opcional — puede venir null o faltar
+    let createdAt: String?     // Opcional por seguridad
+    let updatedAt: String?     // Opcional por seguridad
+    // messages[] viene vacío en el listado — se carga por separado
 }
 
 struct MessageDTO: Codable {
     let id: String
     let conversationId: String
     let senderId: String
+    let senderType: String?  // "artist" | "user" | "client"
     let content: String
-    let type: String // TEXT, IMAGE, FILE
-    let read: Bool
+    let type: String?        // TEXT, IMAGE, FILE
+    let read: Bool?
+    let readAt: String?
     let createdAt: String
 }
 
@@ -513,6 +525,29 @@ struct HealthCheckDTO: Codable {
     let timestamp: String
 }
 
+// MARK: - Auth Me / Verification DTOs
+
+struct AuthMeDTO: Codable {
+    let id: String?
+    let nombre: String?
+    let email: String?
+    let emailVerified: Bool?
+    let role: String?
+    let status: String?
+    let avatar: String?
+    let ciudad: String?
+    let birthDate: String?
+    let documentType: String?
+    let documentNumber: String?
+    let documentFrontUrl: String?
+    let documentBackUrl: String?
+    let documentSelfieUrl: String?
+}
+
+struct DocumentUploadResponse: Codable {
+    let url: String
+}
+
 // MARK: - Extensions for Conversion to Domain Models
 
 extension UserDTO {
@@ -577,7 +612,7 @@ extension BookingDTO {
 
         return Booking(
             remoteId: id,
-            clientName: code ?? "Cliente",
+            clientName: serviceName ?? code ?? "Cliente",
             clientEmail: clientNotes ?? "",
             clientPhone: "",
             scheduledDate: scheduledAt,
@@ -594,11 +629,14 @@ extension BookingDTO {
 extension ServiceDTO {
     func toDomainModel() -> Service {
         return Service(
+            remoteId: id,
             name: name,
             description: description ?? "",
             duration: durationMin ?? 60,
             price: priceDecimal,
             category: category?.name ?? categoryId ?? "General",
+            categoryId: categoryId ?? "",
+            slug: slug ?? "",
             isActive: status == "ACTIVE" || isAvailable == true,
             pricingType: pricingType ?? "FIXED"
         )
@@ -607,17 +645,35 @@ extension ServiceDTO {
 
 extension ConversationDTO {
     func toDomainModel() -> MessagesViewModel.ConversationItem {
-        let lastMessageText = lastMessage?.content ?? ""
-        let dateFormatter = ISO8601DateFormatter()
-        let timestamp = dateFormatter.date(from: updatedAt) ?? Date()
-        
+        let isoFull = ISO8601DateFormatter()
+        isoFull.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let isoBasic = ISO8601DateFormatter()
+
+        // Usar lastMessageAt → updatedAt → ahora como fallback
+        let timestampStr = lastMessageAt ?? updatedAt ?? ""
+        let timestamp = isoFull.date(from: timestampStr)
+            ?? isoBasic.date(from: timestampStr)
+            ?? Date()
+
+        // Stable UUID para SwiftUI identity
+        let stableId = UUID(uuidString: id) ?? UUID()
+
+        // El "otro" participante es el cliente (userId)
+        let clientId = userId ?? ""
+        let clientName = clientId.isEmpty
+            ? "Conversación"
+            : "Cliente ···\(String(clientId.suffix(6)))"
+
         return MessagesViewModel.ConversationItem(
-            clientName: "Client", // Would need separate API call to get client details
+            conversationId: id,
+            stableId: stableId,
+            clientName: clientName,
             clientEmail: "",
-            lastMessage: lastMessageText,
+            lastMessage: "",  // se carga al abrir el chat
             timestamp: timestamp,
-            unreadCount: unreadCount,
-            isOnline: false, // Not available in new API
+            unreadCount: unreadCount ?? 0,
+            isOnline: false,
+            status: status ?? "ACTIVE",
             messages: []
         )
     }
@@ -625,20 +681,182 @@ extension ConversationDTO {
 
 extension MessageDTO {
     func toDomainModel() -> MessagesViewModel.MessageItem {
-        let dateFormatter = ISO8601DateFormatter()
-        let timestamp = dateFormatter.date(from: createdAt) ?? Date()
-        
+        let isoFull = ISO8601DateFormatter()
+        isoFull.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let timestamp = isoFull.date(from: createdAt)
+            ?? ISO8601DateFormatter().date(from: createdAt)
+            ?? Date()
+        // Usar senderType si está disponible; fallback a comparar senderId con JWT
+        let isArtist: Bool
+        if let st = senderType {
+            isArtist = (st == "artist")
+        } else {
+            let currentUserId = AuthService.shared.currentUserId ?? ""
+            isArtist = !currentUserId.isEmpty && senderId == currentUserId
+        }
         return MessagesViewModel.MessageItem(
             content: content,
-            isFromArtist: false, // Would need to check against current user ID
+            isFromArtist: isArtist,
             timestamp: timestamp,
-            isRead: read
+            isRead: read ?? false
         )
     }
+}
+
+// MARK: - Messages list response DTO
+/// Backend may return messages directly as array or wrapped in { "messages": [...] }
+struct MessagesResponseDTO: Codable {
+    let messages: [MessageDTO]
 }
 
 extension ArtistDashboardDTO {
     func toDashboardStats() -> (BookingStatsDTO, RevenueStatsDTO, RatingStatsDTO) {
         return (bookings, revenue, rating)
     }
+}
+
+// MARK: - Blocked Slots DTOs
+/// Estructura real del booking-service (POST /blocked-slots / GET /artists/:id/blocked-slots)
+struct BlockedSlotDTO: Codable {
+    let id: String
+    let artistId: String?
+    let startTime: String    // ISO8601 datetime
+    let endTime: String      // ISO8601 datetime
+    let reason: String?
+    let isRecurring: Bool?
+    let createdAt: String?
+}
+
+/// El backend devuelve el array directamente, sin wrapper.
+/// Este alias queda para compatibilidad con código existente que espera BlockedSlotsResponseDTO.
+struct BlockedSlotsResponseDTO: Codable {
+    // Wrapper vacío — en la práctica se decodifica como [BlockedSlotDTO] directamente.
+    // Ver CalendarViewModel.loadBlockedSlots()
+    let blockedSlots: [BlockedSlotDTO]
+}
+
+struct CreateBlockedSlotRequest: Codable {
+    let artistId: String
+    let startTime: String    // ISO8601 datetime — inicio del bloqueo (00:00:00 del día)
+    let endTime: String      // ISO8601 datetime — fin del bloqueo (23:59:59 del día)
+    let reason: String?
+    let isRecurring: Bool?
+}
+
+// MARK: - Create / Update Service Request
+struct CreateServiceRequest: Codable {
+    let artistId: String     // ID del perfil de artista en el backend
+    let name: String
+    let slug: String         // slug único generado del nombre (minúsculas, sin espacios)
+    let description: String  // mínimo 10 caracteres — requerido por el backend
+    let categoryId: String   // UUID de la categoría seleccionada
+    let pricingType: String  // FIXED | HOURLY | PER_SESSION | CUSTOM
+    let basePrice: Int       // centavos
+    let currency: String?
+    let durationMin: Int?
+}
+
+struct UpdateServiceRequest: Codable {
+    let artistId: String
+    let name: String
+    let slug: String
+    let description: String
+    let categoryId: String
+    let pricingType: String
+    let basePrice: Int
+    let currency: String?
+    let durationMin: Int?
+}
+
+// MARK: - Service Categories DTOs
+struct ServiceCategoryItemDTO: Codable {
+    let id: String
+    let name: String
+    let slug: String?
+    let description: String?
+    let icon: String?
+    let isActive: Bool?
+    let subcategories: [ServiceCategoryItemDTO]?
+}
+
+typealias ServiceCategoriesResponseDTO = [ServiceCategoryItemDTO]
+
+// MARK: - Conversations wrapper (backend puede envolver en objeto)
+struct ConversationsResponseDTO: Codable {
+    let conversations: [ConversationDTO]
+}
+
+// MARK: - Reviews DTOs
+struct ReviewDetailedDTO: Codable {
+    let id: String
+    let bookingId: String?
+    let artistId: String?
+    let clientId: String?
+    let rating: Int            // 1-5
+    let comment: String?
+    let status: String?        // PUBLISHED, PENDING, HIDDEN
+    let response: ReviewResponseDTO?
+    let photos: [ReviewPhotoDTO]?
+    let createdAt: String
+    let updatedAt: String?
+}
+
+struct ReviewResponseDTO: Codable {
+    let id: String?
+    let message: String
+    let createdAt: String
+}
+
+struct ReviewPhotoDTO: Codable {
+    let id: String
+    let url: String
+    let caption: String?
+}
+
+struct ReviewsListResponseDTO: Codable {
+    let reviews: [ReviewDetailedDTO]
+    let total: Int
+    let page: Int
+    let totalPages: Int
+}
+
+struct RespondToReviewRequest: Codable {
+    let message: String
+}
+
+struct ReportReviewRequest: Codable {
+    let reason: String
+    let description: String
+}
+
+// MARK: - Disputes DTOs
+struct DisputeDTO: Codable {
+    let id: String
+    let bookingId: String?
+    let disputeType: String   // CANCELLATION, QUALITY, REFUND, NO_SHOW, ARTIST_NO_SHOW, PRICING, BEHAVIOR, OTHER
+    let status: String        // OPEN, IN_REVIEW, AWAITING_INFO, RESOLVED, CLOSED, ESCALATED
+    let subject: String
+    let description: String?
+    let messages: [DisputeMessageDTO]?
+    let createdAt: String
+    let updatedAt: String?
+}
+
+struct DisputeMessageDTO: Codable {
+    let id: String?
+    let disputeId: String?
+    let senderType: String?   // artist, client, staff
+    let message: String
+    let isStatusUpdate: Bool?
+    let createdAt: String
+}
+
+struct MyDisputesResponseDTO: Codable {
+    let asReporter: [DisputeDTO]?
+    let asReported: [DisputeDTO]?
+    let total: Int?
+}
+
+struct AddDisputeMessageRequest: Codable {
+    let message: String
 }

@@ -33,28 +33,25 @@ struct CalendarView: View {
     private let cal = Calendar.current
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                topBar.padding(.horizontal, 20).padding(.top, 8)
-
-                monthNav.padding(.horizontal, 20).padding(.top, 12)
-
-                calendarCard.padding(.horizontal, 16).padding(.top, 8)
-
-                legendRow.padding(.horizontal, 24).padding(.top, 8)
-
-                dayAgenda.padding(.horizontal, 16).padding(.top, 20)
-
-                actionButtons.padding(.horizontal, 16).padding(.top, 16)
-
-                upcomingSection.padding(.horizontal, 16).padding(.top, 24).padding(.bottom, 120)
+        ZStack {
+            Color(.secondarySystemGroupedBackground).ignoresSafeArea()
+            ScrollView {
+                VStack(spacing: 0) {
+                    topBar.padding(.horizontal, 20).padding(.top, 8)
+                    monthNav.padding(.horizontal, 20).padding(.top, 12)
+                    calendarCard.padding(.horizontal, 16).padding(.top, 8)
+                    legendRow.padding(.horizontal, 24).padding(.top, 8)
+                    dayAgenda.padding(.horizontal, 16).padding(.top, 20)
+                    actionButtons.padding(.horizontal, 16).padding(.top, 16)
+                    upcomingSection.padding(.horizontal, 16).padding(.top, 24).padding(.bottom, 120)
+                }
             }
+            .task { await viewModel.refreshDataAsync() }
+            .onChange(of: selectedDate) { _, date in viewModel.updateSelectedDate(date) }
+            .sheet(isPresented: $showBlockSheet) { blockSheet }
+            .sheet(isPresented: $showScheduleSheet) { scheduleSheet }
         }
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
-        .onAppear { viewModel.refreshData() }
-        .onChange(of: selectedDate) { _, date in viewModel.updateSelectedDate(date) }
-        .sheet(isPresented: $showBlockSheet) { blockSheet }
-        .sheet(isPresented: $showScheduleSheet) { scheduleSheet }
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     // MARK: - Top Bar
@@ -63,9 +60,10 @@ struct CalendarView: View {
             PiumsAvatarView(name: "A", imageURL: nil, size: 38,
                             gradientColors: [.piumsOrange, .piumsAccent])
             Spacer()
-            Text("Piums")
-                .font(.system(size: 20, weight: .heavy, design: .rounded))
-                .foregroundColor(.piumsOrange)
+            Image("PiumsLogo")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(height: 40)
             Spacer()
             Button { } label: {
                 Image(systemName: "gearshape.fill").font(.title3).foregroundColor(.secondary)
@@ -291,7 +289,12 @@ struct CalendarView: View {
                 Text("Al bloquear este día, los clientes no podrán agendar citas.")
                     .font(.subheadline).foregroundColor(.secondary).multilineTextAlignment(.center).padding(.horizontal)
 
-                Button { showBlockSheet = false } label: {
+                Button {
+                    Task {
+                        await viewModel.blockTimeSlot(date: viewModel.selectedDate, reason: "Día bloqueado")
+                        showBlockSheet = false
+                    }
+                } label: {
                     Text("Confirmar bloqueo")
                         .font(.subheadline.weight(.semibold)).foregroundColor(.white)
                         .frame(maxWidth: .infinity).padding(.vertical, 14)
@@ -379,9 +382,12 @@ struct CalendarView: View {
     private func dayStatus(for date: Date) -> DayStatus {
         if cal.isDateInToday(date) { return .today }
         let dayStart = cal.startOfDay(for: date)
-        if let slots = viewModel.availability[dayStart] {
-            if slots.contains(where: { $0.isBooked }) { return .hasBooking }
-        }
+        guard let slots = viewModel.availability[dayStart] else { return .normal }
+        let hasBooking = slots.contains { $0.isBooked }
+        let isBlocked  = slots.allSatisfy { !$0.isAvailable }
+        if isBlocked && hasBooking { return .blockedWithBooking }
+        if isBlocked  { return .blocked }
+        if hasBooking { return .hasBooking }
         return .normal
     }
 }
