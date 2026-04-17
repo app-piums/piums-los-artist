@@ -359,6 +359,7 @@ struct SettingsView: View {
     @State private var showLogoutConfirm = false
     @State private var showEditProfile = false
     @State private var showChangePassword = false
+    @State private var showDisputas = false
 
     @State private var editName = ""
     @State private var editPhone = ""
@@ -442,7 +443,9 @@ struct SettingsView: View {
                 }
 
                 Section("Ayuda y soporte") {
-                    Label("Mis quejas",               systemImage: "exclamationmark.bubble")
+                    Button { showDisputas = true } label: {
+                        Label("Mis quejas", systemImage: "exclamationmark.bubble")
+                    }
                     Label("Términos y condiciones",   systemImage: "doc.text")
                     Label("Política de privacidad",   systemImage: "hand.raised")
                     Label("Contactar soporte",        systemImage: "message")
@@ -469,6 +472,7 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showEditProfile) { editProfileSheet }
             .sheet(isPresented: $showChangePassword) { changePasswordSheet }
+            .sheet(isPresented: $showDisputas) { DisputasView().presentationDetents([.large]) }
         }
         .preferredColorScheme(themeManager.colorScheme)
     }
