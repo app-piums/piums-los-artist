@@ -55,26 +55,45 @@ struct MoreMenuView: View {
 
                 // ── MAIN ──
                 Section("Main") {
-                    menuRow(icon: "bag.fill", title: "Servicios", color: .piumsOrange) { showServices = true }
-                    menuRow(icon: "airplane.departure", title: "Ausencias / Viajes", color: .purple) { showAbsences = true }
-                    menuRow(icon: "sparkles", title: "Tutorial", color: .piumsAccent) {}
+                    Button { showServices = true } label: {
+                        Label("Servicios", systemImage: "bag")
+                    }
+                    Button { showAbsences = true } label: {
+                        Label("Ausencias / Viajes", systemImage: "airplane.departure")
+                    }
+                    Button {} label: {
+                        Label("Tutorial", systemImage: "sparkles")
+                    }
                 }
                 .listRowBackground(Color(.tertiarySystemGroupedBackground))
+                .foregroundStyle(.primary)
 
                 // ── FINANCE ──
                 Section("Finance") {
-                    menuRow(icon: "wallet.pass.fill", title: "Billetera", color: .piumsSuccess) {}
-                    menuRow(icon: "doc.text.fill", title: "Facturas", color: Color(.systemIndigo)) {}
+                    Button {} label: {
+                        Label("Billetera", systemImage: "wallet.pass")
+                    }
+                    Button {} label: {
+                        Label("Facturas", systemImage: "doc.text")
+                    }
                 }
                 .listRowBackground(Color(.tertiarySystemGroupedBackground))
+                .foregroundStyle(.primary)
 
                 // ── CUENTA ──
                 Section("Cuenta") {
-                    menuRow(icon: "star.fill", title: "Reseñas", color: .yellow) { showReviews = true }
-                    menuRow(icon: "exclamationmark.triangle.fill", title: "Quejas", color: .piumsWarning) { showDisputas = true }
-                    menuRow(icon: "gearshape.fill", title: "Configuración", color: Color(.systemGray)) { showSettings = true }
+                    Button { showReviews = true } label: {
+                        Label("Reseñas", systemImage: "star")
+                    }
+                    Button { showDisputas = true } label: {
+                        Label("Quejas", systemImage: "exclamationmark.bubble")
+                    }
+                    Button { showSettings = true } label: {
+                        Label("Configuración", systemImage: "gearshape")
+                    }
                 }
                 .listRowBackground(Color(.tertiarySystemGroupedBackground))
+                .foregroundStyle(.primary)
 
                 // ── CERRAR SESIÓN ──
                 Section {
@@ -104,102 +123,17 @@ struct MoreMenuView: View {
             .sheet(isPresented: $showSettings) {
                 SettingsView().environmentObject(ThemeManager.shared)
             }
-        }
-        .overlay {
-            if showLogoutAlert {
-                LogoutAlertOverlay(
-                    onCancel: { withAnimation { showLogoutAlert = false } },
-                    onConfirm: {
-                        withAnimation { showLogoutAlert = false }
-                        AuthService.shared.logout()
-                    }
-                )
+            .alert("¿Cerrar sesión?", isPresented: $showLogoutAlert) {
+                Button("Cancelar", role: .cancel) {}
+                Button("Cerrar sesión", role: .destructive) {
+                    AuthService.shared.logout()
+                }
+            } message: {
+                Text("Se cerrará tu sesión actual y tendrás que iniciar sesión de nuevo.")
             }
         }
     }
 
-    // MARK: - Menu Row
-    private func menuRow(icon: String, title: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label {
-                Text(title)
-                    .foregroundColor(.primary)
-            } icon: {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 7)
-                        .fill(color)
-                        .frame(width: 28, height: 28)
-                    Image(systemName: icon)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.white)
-                }
-            }
-        }
-        .foregroundColor(.primary)
-    }
-}
-
-// MARK: - LogoutAlertOverlay
-
-private struct LogoutAlertOverlay: View {
-    let onCancel: () -> Void
-    let onConfirm: () -> Void
-
-    var body: some View {
-        ZStack {
-            Color.black.opacity(0.55)
-                .ignoresSafeArea()
-                .onTapGesture { onCancel() }
-
-            VStack(spacing: 0) {
-                VStack(spacing: 8) {
-                    Text("¿Cerrar sesión?")
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(.primary)
-
-                    Text("Se cerrará tu sesión actual y tendrás que iniciar sesión de nuevo.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                .padding(.top, 24)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 24)
-
-                Divider()
-
-                HStack(spacing: 12) {
-                    Button(action: onCancel) {
-                        Text("Cancelar")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 13)
-                            .background(Color(.tertiarySystemGroupedBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                    }
-
-                    Button(action: onConfirm) {
-                        Text("Cerrar sesión")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 13)
-                            .background(Color.red)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 16)
-            }
-            .background(Color(.secondarySystemGroupedBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 20))
-            .padding(.horizontal, 32)
-            .shadow(color: .black.opacity(0.3), radius: 24, y: 8)
-        }
-        .transition(.opacity.combined(with: .scale(scale: 0.95)))
-        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: true)
-    }
 }
 
 #Preview { MoreMenuView() }
