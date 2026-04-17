@@ -452,7 +452,9 @@ struct SettingsView: View {
                     Button { showTerminos = true } label: {
                         Label("Términos y condiciones", systemImage: "doc.text")
                     }
-                    Label("Política de privacidad",   systemImage: "hand.raised")
+                    Button { showPrivacidad = true } label: {
+                        Label("Política de privacidad", systemImage: "hand.raised")
+                    }
                     Label("Contactar soporte",        systemImage: "message")
                 }
                 .foregroundStyle(.primary)
@@ -479,6 +481,7 @@ struct SettingsView: View {
             .sheet(isPresented: $showChangePassword) { changePasswordSheet }
             .sheet(isPresented: $showDisputas) { DisputasView().presentationDetents([.large]) }
             .sheet(isPresented: $showTerminos) { LegalTextSheet(title: "Términos y condiciones", systemImage: "doc.text") }
+            .sheet(isPresented: $showPrivacidad) { LegalTextSheet(title: "Política de privacidad", systemImage: "hand.raised") }
         }
         .preferredColorScheme(themeManager.colorScheme)
     }
