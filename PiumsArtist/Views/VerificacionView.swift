@@ -122,14 +122,10 @@ final class VerificacionViewModel: ObservableObject {
         req.httpBody = body
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: req)
-            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-            print("[VERIFICACION] upload \(folder) → HTTP \(code)")
-            if let raw = String(data: data, encoding: .utf8) { print("[VERIFICACION] \(raw)") }
+            let (data, _) = try await URLSession.shared.data(for: req)
             let result = try JSONDecoder().decode(DocumentUploadResponse.self, from: data)
             return result.url
         } catch {
-            print("[VERIFICACION] upload error: \(error)")
             return nil
         }
     }
