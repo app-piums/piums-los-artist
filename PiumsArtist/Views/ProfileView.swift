@@ -455,7 +455,9 @@ struct SettingsView: View {
                     Button { showPrivacidad = true } label: {
                         Label("Política de privacidad", systemImage: "hand.raised")
                     }
-                    Label("Contactar soporte",        systemImage: "message")
+                    Button { showSoporte = true } label: {
+                        Label("Contactar soporte", systemImage: "message")
+                    }
                 }
                 .foregroundStyle(.primary)
 
@@ -482,6 +484,7 @@ struct SettingsView: View {
             .sheet(isPresented: $showDisputas) { DisputasView().presentationDetents([.large]) }
             .sheet(isPresented: $showTerminos) { LegalTextSheet(title: "Términos y condiciones", systemImage: "doc.text") }
             .sheet(isPresented: $showPrivacidad) { LegalTextSheet(title: "Política de privacidad", systemImage: "hand.raised") }
+            .sheet(isPresented: $showSoporte) { ContactSoporteSheet() }
         }
         .preferredColorScheme(themeManager.colorScheme)
     }
@@ -626,6 +629,96 @@ struct LegalTextSheet: View {
             }
             .background(Color(.secondarySystemGroupedBackground).ignoresSafeArea())
             .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cerrar") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Contact Support Sheet
+
+struct ContactSoporteSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 24) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.piumsInfo.opacity(0.12))
+                            .frame(width: 72, height: 72)
+                        Image(systemName: "headphones")
+                            .font(.system(size: 32))
+                            .foregroundColor(.piumsInfo)
+                    }
+                    .padding(.top, 20)
+
+                    VStack(spacing: 6) {
+                        Text("¿Necesitas ayuda?")
+                            .font(.title3.weight(.bold))
+                        Text("Nuestro equipo de soporte está disponible para ayudarte.")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
+                    }
+
+                    VStack(spacing: 12) {
+                        Link(destination: URL(string: "mailto:soporte@piums.io")!) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "envelope.fill")
+                                    .foregroundColor(.piumsOrange)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Correo electrónico")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("soporte@piums.io")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "arrow.up.right")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(16)
+                            .background(Color(.tertiarySystemGroupedBackground))
+                            .cornerRadius(14)
+                        }
+                        .buttonStyle(.plain)
+
+                        Link(destination: URL(string: "https://piums.com")!) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "globe")
+                                    .foregroundColor(.piumsInfo)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Centro de ayuda")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("piums.com")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "arrow.up.right")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(16)
+                            .background(Color(.tertiarySystemGroupedBackground))
+                            .cornerRadius(14)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 20)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .background(Color(.secondarySystemGroupedBackground).ignoresSafeArea())
+            .navigationTitle("Contactar soporte")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
