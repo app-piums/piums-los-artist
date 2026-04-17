@@ -104,13 +104,16 @@ struct MoreMenuView: View {
             .sheet(isPresented: $showSettings) {
                 SettingsView().environmentObject(ThemeManager.shared)
             }
-            .alert("¿Cerrar sesión?", isPresented: $showLogoutAlert) {
-                Button("Cancelar", role: .cancel) {}
-                Button("Cerrar sesión", role: .destructive) {
-                    AuthService.shared.logout()
-                }
-            } message: {
-                Text("Se cerrará tu sesión actual y tendrás que iniciar sesión de nuevo.")
+        }
+        .overlay {
+            if showLogoutAlert {
+                LogoutAlertOverlay(
+                    onCancel: { withAnimation { showLogoutAlert = false } },
+                    onConfirm: {
+                        withAnimation { showLogoutAlert = false }
+                        AuthService.shared.logout()
+                    }
+                )
             }
         }
     }
@@ -133,6 +136,69 @@ struct MoreMenuView: View {
             }
         }
         .foregroundColor(.primary)
+    }
+}
+
+// MARK: - LogoutAlertOverlay
+
+private struct LogoutAlertOverlay: View {
+    let onCancel: () -> Void
+    let onConfirm: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.55)
+                .ignoresSafeArea()
+                .onTapGesture { onCancel() }
+
+            VStack(spacing: 0) {
+                VStack(spacing: 8) {
+                    Text("¿Cerrar sesión?")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(.primary)
+
+                    Text("Se cerrará tu sesión actual y tendrás que iniciar sesión de nuevo.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.top, 24)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 24)
+
+                Divider()
+
+                HStack(spacing: 12) {
+                    Button(action: onCancel) {
+                        Text("Cancelar")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 13)
+                            .background(Color(.tertiarySystemGroupedBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+
+                    Button(action: onConfirm) {
+                        Text("Cerrar sesión")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 13)
+                            .background(Color.red)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 16)
+            }
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .padding(.horizontal, 32)
+            .shadow(color: .black.opacity(0.3), radius: 24, y: 8)
+        }
+        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: true)
     }
 }
 
