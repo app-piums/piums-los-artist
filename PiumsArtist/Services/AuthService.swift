@@ -342,33 +342,37 @@ struct AuthenticatedView<Content: View>: View {
     }
 }
 
-// MARK: - Login View (Artist Design)
+// MARK: - Login View (Artist Design — mismo estilo que app cliente)
 
 struct LoginView: View {
     @StateObject private var authService = AuthService.shared
+    @FocusState private var focused: LoginField?
     @State private var email = ""
     @State private var password = ""
-    @State private var rememberMe = false
     @State private var showPassword = false
     @State private var animateIn = false
-    
+    @State private var glowPulse = false
+
+    enum LoginField { case email, password }
+
     var body: some View {
-        ZStack {
-            // Dark artistic background
-            artistBackground
-            
-            // Bottom sheet white card
-            VStack(spacing: 0) {
-                Spacer()
-                loginSheet
+        GeometryReader { geo in
+            ZStack(alignment: .bottom) {
+                backgroundLayer(geo: geo)
+                loginCard
+                    .frame(height: geo.size.height * 0.68)
+                    .offset(y: animateIn ? 0 : geo.size.height * 0.7)
             }
-            .ignoresSafeArea(edges: .bottom)
+            .ignoresSafeArea()
         }
-        .ignoresSafeArea()
+        .preferredColorScheme(.dark)
         .onAppear {
             email = authService.artistEmail
-            withAnimation(.easeOut(duration: 0.7).delay(0.1)) {
+            withAnimation(.spring(response: 0.75, dampingFraction: 0.88).delay(0.05)) {
                 animateIn = true
+            }
+            withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true).delay(0.3)) {
+                glowPulse = true
             }
         }
         .alert("Error de Login", isPresented: .constant(authService.errorMessage != nil)) {
@@ -377,267 +381,301 @@ struct LoginView: View {
             Text(authService.errorMessage ?? "")
         }
     }
-    
-    // MARK: - Dark Artistic Background
-    private var artistBackground: some View {
-        ZStack {
-            // Deep dark gradient
-            LinearGradient(
-                colors: [
-                    Color(red: 0.08, green: 0.08, blue: 0.12),
-                    Color(red: 0.12, green: 0.10, blue: 0.08)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            
-            // Decorative circles
+
+    // MARK: - Background
+
+    @ViewBuilder
+    private func backgroundLayer(geo: GeometryProxy) -> some View {
+        ZStack(alignment: .top) {
+            Color.piumsBackground.ignoresSafeArea()
+
+            // Glow naranja animado
             Circle()
-                .fill(Color.piumsOrange.opacity(0.15))
-                .frame(width: 280, height: 280)
-                .blur(radius: 60)
-                .offset(x: -80, y: -60)
-            
-            Circle()
-                .fill(Color.piumsAccent.opacity(0.10))
-                .frame(width: 200, height: 200)
-                .blur(radius: 50)
-                .offset(x: 100, y: 20)
-            
-            // Top content
+                .fill(Color.piumsOrange.opacity(glowPulse ? 0.30 : 0.18))
+                .frame(width: 300, height: 300)
+                .blur(radius: 55)
+                .offset(y: geo.safeAreaInsets.top + 80)
+
             VStack(spacing: 0) {
-                VStack(spacing: 20) {
-                    // Logo
-                    Image("PiumsLogo")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(height: 52)
-                        .opacity(animateIn ? 1 : 0)
-                        .offset(y: animateIn ? 0 : -20)
-                    
-                    // Artist icon / illustration
-                    ZStack {
-                        Circle()
-                            .fill(Color.white.opacity(0.05))
-                            .frame(width: 110, height: 110)
-                        
-                        Circle()
-                            .fill(Color.piumsOrange.opacity(0.15))
-                            .frame(width: 84, height: 84)
-                        
-                        Image(systemName: "music.microphone")
-                            .font(.system(size: 38, weight: .light))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [.piumsOrange, .piumsAccent],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                    }
-                    .scaleEffect(animateIn ? 1 : 0.6)
+                Spacer().frame(height: geo.safeAreaInsets.top + 20)
+
+                // Logo
+                Image("PiumsLogo")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(height: 32)
                     .opacity(animateIn ? 1 : 0)
-                    
-                    VStack(spacing: 6) {
-                        Text("Panel de Artistas")
-                            .font(.title2.weight(.bold))
-                            .foregroundColor(.white)
-                        
-                        Text("Gestiona tu carrera creativa")
-                            .font(.subheadline.weight(.regular))
-                            .foregroundColor(.white.opacity(0.55))
-                    }
-                    .opacity(animateIn ? 1 : 0)
-                    .offset(y: animateIn ? 0 : 10)
+                    .animation(.easeOut(duration: 0.4).delay(0.0), value: animateIn)
+
+                Spacer().frame(height: 28)
+
+                // Ícono artista
+                ZStack {
+                    Circle()
+                        .fill(Color.piumsOrange.opacity(0.15))
+                        .frame(width: 116, height: 116)
+                        .blur(radius: 12)
+
+                    Circle()
+                        .fill(Color.piumsBackgroundElevated)
+                        .frame(width: 92, height: 92)
+                        .overlay(Circle().fill(Color.piumsOrange.opacity(0.22)))
+
+                    Image(systemName: "music.microphone")
+                        .font(.system(size: 36, weight: .regular))
+                        .foregroundStyle(Color.piumsOrange)
                 }
-                .padding(.top, 72)
-                
+                .scaleEffect(animateIn ? 1 : 0.6)
+                .opacity(animateIn ? 1 : 0)
+                .animation(.spring(response: 0.55, dampingFraction: 0.7).delay(0.08), value: animateIn)
+
+                Spacer().frame(height: 20)
+
+                VStack(spacing: 6) {
+                    Text("Panel de Artistas")
+                        .font(.system(size: 26, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text("Gestiona tu carrera creativa")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color.white.opacity(0.5))
+                        .multilineTextAlignment(.center)
+                }
+                .opacity(animateIn ? 1 : 0)
+                .animation(.easeOut(duration: 0.45).delay(0.15), value: animateIn)
+
                 Spacer()
             }
+            .frame(maxWidth: .infinity)
         }
     }
-    
-    // MARK: - White Login Sheet
-    private var loginSheet: some View {
+
+    // MARK: - Card
+
+    private var loginCard: some View {
         VStack(spacing: 0) {
-            // Drag indicator
             RoundedRectangle(cornerRadius: 3)
-                .fill(Color.black.opacity(0.15))
-                .frame(width: 40, height: 4)
-                .padding(.top, 12)
+                .fill(Color.white.opacity(0.18))
+                .frame(width: 36, height: 4)
+                .padding(.top, 14)
                 .padding(.bottom, 28)
-            
-            VStack(alignment: .leading, spacing: 24) {
-                // Sheet header
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Bienvenido de nuevo")
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(.primary)
-                    
-                    Text("Accede a tu panel de control creativo.")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-                
-                // Fields
-                VStack(spacing: 16) {
-                    // Email
+
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 28) {
+
+                    // Header
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("CORREO")
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(.secondary)
-                            .tracking(0.5)
-                        
-                        TextField("nombre@ejemplo.com", text: $email)
-                            .keyboardType(.emailAddress)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 14)
-                            .background(Color(.systemGray6))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                            .font(.body)
+                        Text("Bienvenido de nuevo")
+                            .font(.system(size: 26, weight: .bold))
+                            .foregroundStyle(Color.piumsLabel)
+                        Text("Accede a tu panel de control.")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.piumsLabelSecondary)
                     }
-                    
-                    // Password
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("CONTRASEÑA")
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(.secondary)
-                            .tracking(0.5)
-                        
-                        HStack {
-                            Group {
-                                if showPassword {
-                                    TextField("••••••••", text: $password)
-                                } else {
-                                    SecureField("••••••••", text: $password)
-                                }
-                            }
-                            .padding(.leading, 16)
-                            .font(.body)
-                            
-                            Button(action: { showPassword.toggle() }) {
-                                Image(systemName: showPassword ? "eye.slash.fill" : "eye.fill")
-                                    .foregroundColor(.secondary)
-                                    .padding(.trailing, 16)
-                            }
-                        }
-                        .frame(height: 50)
-                        .background(Color(.systemGray6))
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        
-                        // Forgot password
-                        HStack {
+
+                    // Campos
+                    VStack(spacing: 14) {
+                        fieldEmail
+                        fieldPassword
+                    }
+
+                    // Error
+                    if let msg = authService.errorMessage {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.circle.fill")
+                                .foregroundStyle(Color.piumsError)
+                            Text(msg)
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(Color.piumsError)
                             Spacer()
-                            Button("¿Olvidaste tu contraseña?") {}
-                                .font(.subheadline.weight(.medium))
-                                .foregroundColor(.piumsOrange)
                         }
-                    }
-                }
-                
-                // Login Button
-                Button {
-                    Task {
-                        await authService.login(
-                            email: email,
-                            password: password,
-                            rememberMe: rememberMe
-                        )
-                    }
-                } label: {
-                    HStack(spacing: 8) {
-                        if authService.isLoading {
-                            ProgressView()
-                                .tint(.white)
-                                .scaleEffect(0.9)
-                        }
-                        Text(authService.isLoading ? "Iniciando sesión..." : "Iniciar sesión")
-                            .font(.body.weight(.semibold))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 52)
-                    .background(
-                        email.isEmpty || password.isEmpty
-                        ? Color.piumsOrange.opacity(0.5)
-                        : Color.piumsOrange
-                    )
-                    .foregroundColor(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                }
-                .disabled(authService.isLoading || email.isEmpty || password.isEmpty)
-                
-                // Divider
-                HStack(spacing: 12) {
-                    Rectangle()
-                        .fill(Color(.systemGray4))
-                        .frame(height: 1)
-                    
-                    Text("O CONTINUAR CON")
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(.secondary)
-                        .fixedSize()
-                    
-                    Rectangle()
-                        .fill(Color(.systemGray4))
-                        .frame(height: 1)
-                }
-                
-                // Social login
-                HStack(spacing: 12) {
-                    // Google
-                    Button {
-                        // Google OAuth
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: "g.circle.fill")
-                                .font(.title3)
-                                .foregroundColor(Color(red: 0.26, green: 0.52, blue: 0.96))
-                            Text("Continuar con Google")
-                                .font(.subheadline.weight(.medium))
-                                .foregroundColor(.primary)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .background(Color(.systemGray6))
+                        .padding(14)
+                        .background(Color.piumsError.opacity(0.1))
                         .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.piumsError.opacity(0.3), lineWidth: 0.5))
                     }
-                    
-                    // Apple
-                    Button {
-                        // Apple Sign In
-                    } label: {
-                        Image(systemName: "apple.logo")
-                            .font(.title3.weight(.medium))
-                            .foregroundColor(.primary)
-                            .frame(width: 50, height: 50)
-                            .background(Color(.systemGray6))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                    // Botón login
+                    loginButton
+
+                    // Divisor
+                    HStack(spacing: 12) {
+                        Rectangle().fill(Color.piumsSeparator).frame(height: 1)
+                        Text("O CONTINUAR CON")
+                            .font(.caption.bold())
+                            .foregroundStyle(Color.piumsLabelSecondary)
+                            .tracking(0.8)
+                            .fixedSize()
+                        Rectangle().fill(Color.piumsSeparator).frame(height: 1)
+                    }
+
+                    // Social
+                    HStack(spacing: 12) {
+                        // Google
+                        Button {} label: {
+                            HStack(spacing: 10) {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 7)
+                                        .fill(Color(.systemGray5))
+                                        .frame(width: 30, height: 30)
+                                    Text("G")
+                                        .font(.system(size: 15, weight: .bold))
+                                        .foregroundStyle(
+                                            LinearGradient(
+                                                colors: [Color(red: 0.26, green: 0.52, blue: 0.96),
+                                                         Color(red: 0.20, green: 0.66, blue: 0.33)],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                }
+                                Text("Continuar con Google")
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundStyle(Color.piumsLabel)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 52)
+                            .background(Color.piumsBackgroundElevated)
+                            .clipShape(RoundedRectangle(cornerRadius: 13))
+                        }
+
+                        // Apple
+                        Button {} label: {
+                            Image(systemName: "applelogo")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(Color.piumsLabel)
+                                .frame(width: 52, height: 52)
+                                .background(Color.piumsBackgroundElevated)
+                                .clipShape(RoundedRectangle(cornerRadius: 13))
+                        }
                     }
                 }
-                
-                // Register link
-                HStack(spacing: 4) {
-                    Text("¿Aún no tienes cuenta?")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    
-                    Button("Regístrate gratis") {}
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(.piumsOrange)
-                }
-                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 26)
+                .padding(.bottom, 50)
             }
-            .padding(.horizontal, 28)
-            .padding(.bottom, 40)
+            .scrollDismissesKeyboard(.interactively)
         }
         .background(
-            RoundedRectangle(cornerRadius: 32)
-                .fill(Color(.systemBackground))
+            RoundedRectangle(cornerRadius: 28)
+                .fill(Color.piumsBackgroundSecondary)
                 .ignoresSafeArea(edges: .bottom)
         )
-        .offset(y: animateIn ? 0 : 400)
+    }
+
+    // MARK: - Fields
+
+    private var fieldEmail: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("CORREO")
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+                .tracking(1.2)
+
+            TextField("nombre@ejemplo.com", text: $email)
+                .keyboardType(.emailAddress)
+                .textContentType(.emailAddress)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .focused($focused, equals: .email)
+                .submitLabel(.next)
+                .onSubmit { focused = .password }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 15)
+                .background(Color.piumsBackgroundElevated)
+                .clipShape(RoundedRectangle(cornerRadius: 13))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 13)
+                        .strokeBorder(
+                            focused == .email ? Color.piumsOrange.opacity(0.7) : Color.clear,
+                            lineWidth: 1.5
+                        )
+                )
+                .animation(.easeInOut(duration: 0.2), value: focused == .email)
+        }
+    }
+
+    private var fieldPassword: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("CONTRASEÑA")
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+                .tracking(1.2)
+
+            HStack(spacing: 0) {
+                Group {
+                    if showPassword {
+                        TextField("••••••••", text: $password)
+                    } else {
+                        SecureField("••••••••", text: $password)
+                    }
+                }
+                .textContentType(.password)
+                .focused($focused, equals: .password)
+                .submitLabel(.done)
+                .onSubmit { Task { await authService.login(email: email, password: password) } }
+
+                Button { showPassword.toggle() } label: {
+                    Image(systemName: showPassword ? "eye.slash.fill" : "eye.fill")
+                        .font(.system(size: 15))
+                        .foregroundStyle(focused == .password ? Color.piumsOrange.opacity(0.8) : .secondary)
+                        .padding(.trailing, 2)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 15)
+            .background(Color.piumsBackgroundElevated)
+            .clipShape(RoundedRectangle(cornerRadius: 13))
+            .overlay(
+                RoundedRectangle(cornerRadius: 13)
+                    .strokeBorder(
+                        focused == .password ? Color.piumsOrange.opacity(0.7) : Color.clear,
+                        lineWidth: 1.5
+                    )
+            )
+            .animation(.easeInOut(duration: 0.2), value: focused == .password)
+
+            HStack {
+                Spacer()
+                Button("¿Olvidaste tu contraseña?") {}
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(Color.piumsOrange)
+            }
+            .padding(.top, 2)
+        }
+    }
+
+    // MARK: - Login Button
+
+    private var loginButton: some View {
+        let empty = email.isEmpty || password.isEmpty
+        return Button {
+            Task { await authService.login(email: email, password: password) }
+        } label: {
+            ZStack {
+                if authService.isLoading {
+                    HStack(spacing: 8) {
+                        ProgressView().tint(.white).scaleEffect(0.85)
+                        Text("Iniciando sesión…").font(.body.bold())
+                    }
+                } else {
+                    Text("Iniciar sesión").font(.body.bold())
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 54)
+            .background(
+                LinearGradient(
+                    colors: empty
+                        ? [Color.piumsOrange.opacity(0.4), Color.piumsOrange.opacity(0.4)]
+                        : [Color(red: 0.85, green: 0.38, blue: 0.12), Color(red: 0.72, green: 0.28, blue: 0.07)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .foregroundStyle(.white)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+        }
+        .disabled(authService.isLoading || empty)
+        .animation(.easeInOut(duration: 0.2), value: empty)
     }
 }
 

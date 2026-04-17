@@ -35,6 +35,17 @@ La app usa colores del sistema iOS mapeados a equivalentes Material 3 en Android
 | Navigation bar | `secondarySystemGroupedBackground` | `surfaceContainer` | `#1C1C1E` | `#FFFFFF` |
 | Fondo base (evitar) | `systemGroupedBackground` | `background` | `#000000` | `#F2F2F7` |
 
+### Paleta Piums (usada en Login/Auth — idéntica a app cliente)
+
+| Token | Dark mode | Light mode | Uso |
+|---|---|---|---|
+| `piumsBackground` | `#121212` | `#FFFFFF` | Fondo login/auth |
+| `piumsBackgroundSecondary` | `#1C1C1E` | `#F2F2F7` | Card del login (sheet) |
+| `piumsBackgroundElevated` | `#28282A` | `#FFFFFF` | Campos de texto, botones sociales |
+| `piumsLabel` | `#FFFFFF` | `#000000` | Texto primario en login |
+| `piumsLabelSecondary` | `#8E8E93` | `#6E6E73` | Texto secundario en login |
+| `piumsSeparator` | `#383840` | `#C7C7CC` | Divisores |
+
 **Regla clave:** nunca usar el color base puro (`#000000` dark / `#F2F2F7` light) como fondo de página — usar siempre `surfaceVariant` equivalente para mantener la tonalidad gris consistente en modo oscuro.
 
 ---
