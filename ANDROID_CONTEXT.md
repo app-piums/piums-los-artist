@@ -141,8 +141,11 @@ Color activo del tab: `piumsOrange` (`#FF6B35`).
 - Tiles: "RESERVAS — X Sesiones" + "ESTADO — Disponible"
 
 **Acciones:**
-- Botón "Bloquear día" (naranja, full width)
-- Pills: "Disponible" (verde) + "Horarios" (naranja)
+- Botón "Bloquear día" (naranja, full width) → POST `/blocked-slots`
+- Pill izquierdo: dinámico — muestra "Desbloquear" (verde, `lock.open`) si el día está bloqueado, o "Disponible" (gris, `checkmark.circle`) si no. Tap en "Desbloquear" → DELETE `/blocked-slots/{id}`
+- Pill "Horarios" (naranja) → sheet con grid de slots del día
+
+**Estado bloqueado:** guardar un `Map<Date, slotId>` al cargar blocked-slots para poder identificar el ID a eliminar cuando el artista quiere desbloquear un día.
 
 **Próximas reservas:** lista de slots con hora
 
@@ -229,10 +232,14 @@ Color activo del tab: `piumsOrange` (`#FF6B35`).
 ### 4.8 Configuración (`SettingsScreen`)
 - Toggle Modo Oscuro / Claro
 - Notificaciones push
+- Editar perfil (nombre, teléfono, bio) → `PUT /users/me/profile`
+- Cambiar contraseña → `PATCH /users/me/password`
 - Cerrar sesión
 - Versión de app
 
 **ThemeManager:** persistir preferencia en SharedPreferences / DataStore.
+
+**Botón "Editar Perfil"** en ProfileScreen debe abrir directamente el formulario de edición (no navegar a Settings). SettingsScreen se accede desde el ícono de engranaje en las top bars.
 
 ---
 

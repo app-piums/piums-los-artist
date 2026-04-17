@@ -29,6 +29,7 @@ struct CalendarView: View {
     @State private var currentMonth = Date()
     @State private var showBlockSheet = false
     @State private var showScheduleSheet = false
+    @State private var showSettings = false
 
     private let cal = Calendar.current
 
@@ -52,6 +53,7 @@ struct CalendarView: View {
             .sheet(isPresented: $showScheduleSheet) { scheduleSheet }
         }
         .toolbar(.hidden, for: .navigationBar)
+        .sheet(isPresented: $showSettings) { SettingsView().environmentObject(ThemeManager.shared) }
     }
 
     // MARK: - Top Bar
@@ -65,7 +67,7 @@ struct CalendarView: View {
                 .aspectRatio(contentMode: .fit)
                 .frame(height: 40)
             Spacer()
-            Button { } label: {
+            Button { showSettings = true } label: {
                 Image(systemName: "gearshape.fill").font(.title3).foregroundColor(.secondary)
             }
         }
@@ -218,7 +220,15 @@ struct CalendarView: View {
             }
 
             HStack(spacing: 10) {
-                pillButton("Disponible", icon: "checkmark.circle.fill", fg: .piumsSuccess) {}
+                let dayStart = cal.startOfDay(for: selectedDate)
+                let isBlocked = viewModel.blockedSlotIds[dayStart] != nil
+                pillButton(
+                    isBlocked ? "Desbloquear" : "Disponible",
+                    icon: isBlocked ? "lock.open.fill" : "checkmark.circle.fill",
+                    fg: isBlocked ? .piumsSuccess : .secondary
+                ) {
+                    if isBlocked { Task { await viewModel.unblockSelectedDay() } }
+                }
                 pillButton("Horarios", icon: "clock.fill", fg: .piumsOrange) { showScheduleSheet = true }
             }
         }

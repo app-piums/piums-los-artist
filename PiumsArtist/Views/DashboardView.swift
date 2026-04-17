@@ -10,6 +10,7 @@ struct DashboardView: View {
     @StateObject private var viewModel = DashboardViewModel()
     @Environment(\.modelContext) private var modelContext
     @State private var showingNotifications = false
+    @State private var showProfile = false
     @State private var animateStats = false
 
     private static let dateFormatter: DateFormatter = {
@@ -77,6 +78,7 @@ struct DashboardView: View {
                 }
             }
             .sheet(isPresented: $showingNotifications) { NotificationsSheet() }
+            .sheet(isPresented: $showProfile) { ProfileView() }
         }
         .toolbar(.hidden, for: .navigationBar)
     }
@@ -227,14 +229,19 @@ struct DashboardView: View {
 
     // MARK: - Profile Strength Card
     private var profileStrengthCard: some View {
-        let percentage = 40
+        let artist = AuthService.shared.currentArtist
+        let hasBio = !(artist?.bio ?? "").isEmpty
+        let hasPhone = !(artist?.phone ?? "").isEmpty
+        let hasServices = viewModel.totalBookings > 0
+        let hasReviews = (artist?.totalReviews ?? 0) > 0 || (artist?.rating ?? 0) > 0
         let items: [(String, Bool)] = [
             ("Foto de perfil agregada", false),
-            ("Descripción de perfil", true),
-            ("Servicios publicados", false),
-            ("Redes sociales vinculadas", false),
-            ("Primera reseña obtenida", true)
+            ("Descripción de perfil", hasBio),
+            ("Servicios publicados", hasServices),
+            ("Datos de contacto", hasPhone),
+            ("Primera reseña obtenida", hasReviews)
         ]
+        let percentage = items.filter { $0.1 }.count * 20
 
         return VStack(alignment: .leading, spacing: 16) {
             // Title row
@@ -350,9 +357,7 @@ struct DashboardView: View {
                     .padding(.vertical, 20)
 
                     // CTA button
-                    Button {
-                        // Promote profile action
-                    } label: {
+                    Button { showProfile = true } label: {
                         Text("Promocionar Perfil")
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(.white)

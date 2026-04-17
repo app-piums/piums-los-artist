@@ -13,6 +13,8 @@ struct MoreMenuView: View {
     @State private var showLogoutAlert = false
     @State private var showReviews = false
     @State private var showDisputas = false
+    @State private var showComingSoon = false
+    @State private var comingSoonTitle = ""
 
     var body: some View {
         NavigationView {
@@ -61,7 +63,7 @@ struct MoreMenuView: View {
                     Button { showAbsences = true } label: {
                         Label("Ausencias / Viajes", systemImage: "airplane.departure")
                     }
-                    Button {} label: {
+                    Button { comingSoonTitle = "Tutorial"; showComingSoon = true } label: {
                         Label("Tutorial", systemImage: "sparkles")
                     }
                 }
@@ -70,10 +72,10 @@ struct MoreMenuView: View {
 
                 // ── FINANCE ──
                 Section("Finance") {
-                    Button {} label: {
+                    Button { comingSoonTitle = "Billetera"; showComingSoon = true } label: {
                         Label("Billetera", systemImage: "wallet.pass")
                     }
-                    Button {} label: {
+                    Button { comingSoonTitle = "Facturas"; showComingSoon = true } label: {
                         Label("Facturas", systemImage: "doc.text")
                     }
                 }
@@ -130,6 +132,11 @@ struct MoreMenuView: View {
                 }
             } message: {
                 Text("Se cerrará tu sesión actual y tendrás que iniciar sesión de nuevo.")
+            }
+            .alert("Próximamente", isPresented: $showComingSoon) {
+                Button("Entendido", role: .cancel) {}
+            } message: {
+                Text("\(comingSoonTitle) estará disponible en una próxima actualización.")
             }
         }
     }

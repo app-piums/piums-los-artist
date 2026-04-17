@@ -176,49 +176,33 @@ final class BookingsViewModel: ObservableObject {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let token = APIService.shared.authToken {
             req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        } else {
-            print("⚠️ loadBookings: sin token de autenticación")
         }
 
         do {
             let (data, response) = try await URLSession.shared.data(for: req)
 
             if let http = response as? HTTPURLResponse {
-                print("📨 GET /artists/dashboard/me/bookings → HTTP \(http.statusCode)")
                 if http.statusCode == 401 {
                     errorMessage = "Sesión expirada. Vuelve a iniciar sesión."; return
                 }
                 if http.statusCode >= 400 {
-                    let raw = String(data: data, encoding: .utf8) ?? "(sin cuerpo)"
-                    print("❌ Bookings error body: \(raw)")
                     errorMessage = "Error del servidor (\(http.statusCode))"; return
                 }
             }
 
-            if let raw = String(data: data, encoding: .utf8) {
-                print("📦 Bookings raw JSON (primeros 800 chars): \(raw.prefix(800))")
-            }
-
             let decoder = JSONDecoder()
-            // Intentar estructura envuelta { bookings: [...], total:, page:, totalPages: }
             if let wrapped = try? decoder.decode(ArtistBookingsResponseDTO.self, from: data) {
-                print("✅ Bookings decode OK (wrapped) — \(wrapped.bookings.count) reservas")
                 self.bookings = wrapped.bookings.map { $0.toDomainModel() }
                 applyFilter(); return
             }
-            // Fallback: array directo
             if let dtos = try? decoder.decode([BookingDTO].self, from: data) {
-                print("✅ Bookings decode OK (array) — \(dtos.count) reservas")
                 self.bookings = dtos.map { $0.toDomainModel() }
                 applyFilter(); return
             }
 
-            let rawStr = String(data: data, encoding: .utf8) ?? "(no legible)"
-            print("❌ Bookings decode FAILED. JSON: \(rawStr)")
-            errorMessage = "Respuesta inesperada del servidor. Revisa los logs."
+            errorMessage = "Respuesta inesperada del servidor."
 
         } catch {
-            print("❌ Bookings network error: \(error)")
             errorMessage = error.localizedDescription
         }
     }
@@ -348,6 +332,7 @@ final class CalendarViewModel: ObservableObject {
     @Published var selectedDate = Date()
     @Published var currentMonth = Date()
     @Published var availability: [Date: [TimeSlot]] = [:]
+    @Published var blockedSlotIds: [Date: String] = [:]
     @Published var isLoading = false
     
     struct TimeSlot: Identifiable {
@@ -392,10 +377,7 @@ final class CalendarViewModel: ObservableObject {
     
     @MainActor
     func blockTimeSlot(date: Date, reason: String) async {
-        guard let artistId = AuthService.shared.artistBackendId else {
-            print("⚠️ blockTimeSlot: artistBackendId no disponible aún (el perfil no se ha cargado)")
-            return
-        }
+        guard let artistId = AuthService.shared.artistBackendId else { return }
         isLoading = true
 
         // El backend almacena rangos — bloqueamos el día completo (00:00 → 23:59:59)
@@ -420,11 +402,8 @@ final class CalendarViewModel: ObservableObject {
                 body: body,
                 responseType: BlockedSlotDTO.self
             )
-            print("✅ Slot bloqueado exitosamente")
             await loadBlockedSlots()
-        } catch {
-            print("❌ Error bloqueando slot: \(error)")
-        }
+        } catch { }
         isLoading = false
     }
 
@@ -437,44 +416,37 @@ final class CalendarViewModel: ObservableObject {
                 method: .DELETE,
                 responseType: EmptyResponseDTO.self
             )
-            print("✅ Slot desbloqueado exitosamente")
             await loadBlockedSlots()
-        } catch {
-            print("❌ Error desbloqueando slot: \(error)")
-        }
+        } catch { }
         isLoading = false
     }
 
     @MainActor
     private func loadBlockedSlots() async {
-        guard let artistId = AuthService.shared.artistBackendId else {
-            print("⚠️ loadBlockedSlots: artistBackendId no disponible — esperando carga de perfil")
-            return
-        }
+        guard let artistId = AuthService.shared.artistBackendId else { return }
 
         let isoFull = ISO8601DateFormatter()
         isoFull.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let isoBasic = ISO8601DateFormatter()
         let cal = Calendar.current
+        blockedSlotIds = [:]
 
         do {
-            // El backend devuelve el array directamente (no wrapped)
             let slots = try await APIService.shared.get(
                 endpoint: .getBlockedSlots(artistId: artistId),
                 responseType: [BlockedSlotDTO].self
             )
 
             for slot in slots {
-                // Parsear startTime; cubrir días completos afectados por el rango
                 guard let start = isoFull.date(from: slot.startTime)
                                 ?? isoBasic.date(from: slot.startTime),
                       let end   = isoFull.date(from: slot.endTime)
                                 ?? isoBasic.date(from: slot.endTime)
                 else { continue }
 
-                // Iterar cada día dentro del rango bloqueado
                 var current = cal.startOfDay(for: start)
                 while current <= cal.startOfDay(for: end) {
+                    blockedSlotIds[current] = slot.id
                     if let existing = availability[current] {
                         availability[current] = existing.map {
                             TimeSlot(time: $0.time, isAvailable: false, isBooked: $0.isBooked)
@@ -485,9 +457,13 @@ final class CalendarViewModel: ObservableObject {
                     current = cal.date(byAdding: .day, value: 1, to: current) ?? current
                 }
             }
-        } catch {
-            print("⚠️ loadBlockedSlots error (usando mock): \(error)")
-        }
+        } catch { }
+    }
+
+    func unblockSelectedDay() async {
+        let dayStart = Calendar.current.startOfDay(for: selectedDate)
+        guard let slotId = blockedSlotIds[dayStart] else { return }
+        await unblockSlot(slotId: slotId)
     }
 
     private func defaultSlots(for date: Date, blocked: Bool) -> [TimeSlot] {
@@ -621,49 +597,33 @@ final class MessagesViewModel: ObservableObject {
             let (data, response) = try await URLSession.shared.data(for: req)
 
             if let http = response as? HTTPURLResponse {
-                print("📨 GET /chat/conversations → HTTP \(http.statusCode)")
                 if http.statusCode == 401 {
                     self.errorMessage = "Sesión expirada. Vuelve a iniciar sesión."
                     return
                 }
                 if http.statusCode >= 400 {
-                    let raw = String(data: data, encoding: .utf8) ?? "(sin cuerpo)"
-                    print("❌ Conversations error body: \(raw)")
                     self.errorMessage = "Error del servidor (\(http.statusCode))"
                     return
                 }
             }
 
-            // Log del JSON crudo para diagnosticar problemas de decode
-            if let raw = String(data: data, encoding: .utf8) {
-                print("📦 Conversations raw JSON (primeros 600 chars): \(raw.prefix(600))")
-            }
-
             let decoder = JSONDecoder()
 
-            // Intentar decode como objeto envuelto { conversations: [...] }
             if let wrapped = try? decoder.decode(ConversationsResponseDTO.self, from: data) {
-                print("✅ Decode OK (wrapped) — \(wrapped.conversations.count) conversaciones")
                 self.conversations = wrapped.conversations.map { $0.toDomainModel() }
                 filterConversations()
                 return
             }
 
-            // Fallback: array directo
             if let dtos = try? decoder.decode([ConversationDTO].self, from: data) {
-                print("✅ Decode OK (array) — \(dtos.count) conversaciones")
                 self.conversations = dtos.map { $0.toDomainModel() }
                 filterConversations()
                 return
             }
 
-            // Ambos fallaron — mostrar error descriptivo
-            let rawStr = String(data: data, encoding: .utf8) ?? "(datos no legibles)"
-            print("❌ Conversations decode FAILED. JSON: \(rawStr)")
-            self.errorMessage = "Respuesta inesperada del servidor. Revisa los logs de Xcode."
+            self.errorMessage = "Respuesta inesperada del servidor."
 
         } catch {
-            print("❌ Conversations network error: \(error)")
             self.errorMessage = error.localizedDescription
         }
     }
@@ -686,9 +646,7 @@ final class MessagesViewModel: ObservableObject {
                 )
                 messages = dtos.map { $0.toDomainModel() }
             }
-        } catch {
-            print("⚠️ loadMessages error for \(conversationId): \(error)")
-        }
+        } catch { }
         // Marcar conversación como leída (igual que hace el cliente)
         try? await apiService.request(
             endpoint: .markConversationRead(conversationId),

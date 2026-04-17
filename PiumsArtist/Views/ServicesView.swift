@@ -16,6 +16,7 @@ struct ServicesView: View {
     @State private var selectedService: Service?
     @State private var showDeleteConfirmation = false
     @State private var serviceToDelete: Service?
+    @State private var showSettings = false
 
     var body: some View {
         ZStack {
@@ -43,6 +44,7 @@ struct ServicesView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .refreshable { await viewModel.refreshData() }
+        .sheet(isPresented: $showSettings) { SettingsView().environmentObject(ThemeManager.shared) }
         .sheet(isPresented: $showAddService) { addServiceSheet }
         .sheet(isPresented: $showEditService) {
             if let service = selectedService {
@@ -74,7 +76,7 @@ struct ServicesView: View {
                 .aspectRatio(contentMode: .fit)
                 .frame(height: 40)
             Spacer()
-            Button { } label: {
+            Button { showSettings = true } label: {
                 Image(systemName: "gearshape.fill").font(.title3).foregroundColor(.secondary)
             }
         }

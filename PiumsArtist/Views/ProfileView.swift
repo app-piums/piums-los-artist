@@ -14,6 +14,8 @@ struct ProfileView: View {
     @StateObject private var authService = AuthService.shared
     @State private var showingSettings = false
     @State private var showVerificacion = false
+    @State private var showEditProfile = false
+    @State private var showPhotoAlert = false
 
     private var artist: Artist? { vm.artist ?? AuthService.shared.currentArtist }
 
@@ -36,6 +38,12 @@ struct ProfileView: View {
             .toolbarBackground(Color(.secondarySystemGroupedBackground), for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .refreshable { await vm.refreshData() }
+            .sheet(isPresented: $showEditProfile) { EditArtistProfileSheet() }
+            .alert("Foto de perfil", isPresented: $showPhotoAlert) {
+                Button("Entendido", role: .cancel) {}
+            } message: {
+                Text("La subida de foto de perfil estará disponible en una próxima actualización.")
+            }
             .sheet(isPresented: $showingSettings) {
                 SettingsView().environmentObject(ThemeManager.shared)
             }
@@ -63,7 +71,7 @@ struct ProfileView: View {
                 gradientColors: [.piumsOrange, .piumsAccent]
             )
             .overlay(alignment: .bottomTrailing) {
-                Button { } label: {
+                Button { showPhotoAlert = true } label: {
                     Image(systemName: "camera.fill")
                         .font(.caption.weight(.semibold))
                         .foregroundColor(.white)
@@ -99,7 +107,7 @@ struct ProfileView: View {
                 }
             }
 
-            Button { showingSettings = true } label: {
+            Button { showEditProfile = true } label: {
                 Label("Editar Perfil", systemImage: "pencil")
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(.white)
@@ -285,6 +293,70 @@ struct ArtistData {
     var phone: String
     var email: String
     var bio: String
+}
+
+// MARK: - Edit Artist Profile Sheet
+
+private struct EditArtistProfileSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var name: String = AuthService.shared.currentArtist?.name ?? ""
+    @State private var phone: String = AuthService.shared.currentArtist?.phone ?? ""
+    @State private var bio: String = AuthService.shared.currentArtist?.bio ?? ""
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section("Nombre") {
+                    TextField("Nombre completo", text: $name)
+                }
+                Section("Teléfono") {
+                    TextField("Teléfono", text: $phone).keyboardType(.phonePad)
+                }
+                Section("Biografía") {
+                    TextField("Cuéntanos sobre ti", text: $bio, axis: .vertical).lineLimit(3...6)
+                }
+                if let msg = errorMessage {
+                    Section {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.piumsError)
+                            Text(msg).font(.caption)
+                        }
+                    }.listRowSeparator(.hidden)
+                }
+            }
+            .navigationTitle("Editar Perfil")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Guardar") { Task { await save() } }
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.piumsOrange)
+                        .disabled(isSaving)
+                }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancelar") { dismiss() }
+                }
+            }
+            .overlay { if isSaving { ProgressView() } }
+        }
+    }
+
+    private func save() async {
+        isSaving = true; errorMessage = nil
+        do {
+            let body = UpdateUserRequest(name: name, phone: phone, bio: bio, location: nil)
+            let _ = try await APIService.shared.put(endpoint: .updateUserProfile, body: body, responseType: UserDTO.self)
+            AuthService.shared.currentArtist?.name = name
+            AuthService.shared.currentArtist?.phone = phone
+            AuthService.shared.currentArtist?.bio = bio
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isSaving = false
+    }
 }
 
 // MARK: - Settings View
