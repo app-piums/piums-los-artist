@@ -11,6 +11,7 @@ struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var showingNotifications = false
     @State private var showProfile = false
+    @State private var showAllBookings = false
     @State private var animateStats = false
 
     private static let dateFormatter: DateFormatter = {
@@ -79,6 +80,7 @@ struct DashboardView: View {
             }
             .sheet(isPresented: $showingNotifications) { NotificationsSheet() }
             .sheet(isPresented: $showProfile) { ProfileView() }
+            .sheet(isPresented: $showAllBookings) { NavigationView { BookingsView() }.presentationDetents([.large]) }
         }
         .toolbar(.hidden, for: .navigationBar)
     }
@@ -323,7 +325,7 @@ struct DashboardView: View {
                     .font(.headline.weight(.bold))
                     .foregroundColor(.piumsTextPrimary)
                 Spacer()
-                Button("VER TODO") {}
+                Button("VER TODO") { showAllBookings = true }
                     .font(.caption.weight(.bold))
                     .foregroundColor(.piumsOrange)
             }

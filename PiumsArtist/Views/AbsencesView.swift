@@ -165,14 +165,8 @@ struct AbsencesView: View {
     // MARK: - Activity Section
     private var activitySection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("Registro de actividad")
-                    .font(.title3.weight(.bold))
-                Spacer()
-                Button("VER HISTORIAL") {}
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(.piumsOrange)
-            }
+            Text("Registro de actividad")
+                .font(.title3.weight(.bold))
 
             if viewModel.isLoading {
                 HStack { Spacer(); ProgressView(); Spacer() }
