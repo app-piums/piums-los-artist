@@ -15,14 +15,6 @@ extension Color {
     static let piumsAccent    = Color(hex: "#F59E0B") // Amber accent
     static let piumsOrange    = Color(hex: "#FF6B35") // Brand Orange (alias)
 
-    // Colores del sistema Piums (light: blanco/gris · dark: #121212/#1C1C1E/#28282A)
-    static let piumsBackground          = Color("PiumsBackground")
-    static let piumsBackgroundSecondary = Color("PiumsBackgroundSecondary")
-    static let piumsBackgroundElevated  = Color("PiumsBackgroundElevated")
-    static let piumsLabel               = Color("PiumsLabel")
-    static let piumsLabelSecondary      = Color("PiumsLabelSecondary")
-    static let piumsSeparator           = Color("PiumsSeparator")
-
     // UI Colors
     static let piumsCardBackground = Color(.secondarySystemBackground)
     static let piumsSurface = Color(.tertiarySystemBackground)
