@@ -200,84 +200,76 @@ struct ProfileView: View {
 
     private var settingsSection: some View {
         VStack(spacing: 0) {
-            settingsRow(icon: "gearshape.fill",   label: "Configuración",   color: Color(.systemGray)) { showingSettings = true }
-            Divider().padding(.leading, 58)
-            // Fila de verificación con badge si aún no está enviada
-            verificationRow
-            Divider().padding(.leading, 58)
-            settingsRow(icon: "bell.fill",         label: "Notificaciones",  color: .piumsInfo) {}
-            Divider().padding(.leading, 58)
-            settingsRow(icon: "hand.raised.fill",  label: "Privacidad",      color: .piumsSuccess) {}
-            Divider().padding(.leading, 58)
-            settingsRow(icon: "questionmark.circle.fill", label: "Ayuda y Soporte", color: .piumsWarning) {}
-            Divider().padding(.leading, 58)
-            settingsRow(icon: "rectangle.portrait.and.arrow.right.fill",
-                        label: "Cerrar Sesión", color: .piumsError) {
-                AuthService.shared.logout()
+            settingsRow("Configuración",            icon: "gearshape")          { showingSettings = true }
+            rowDivider
+            // Verificación con badge dinámico
+            Button { showVerificacion = true } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "shield.checkered")
+                        .frame(width: 22)
+                    Text("Verificación de Identidad")
+                        .font(.subheadline)
+                    Spacer()
+                    if authService.needsVerification {
+                        Text("Pendiente")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(Color.piumsError)
+                            .clipShape(Capsule())
+                    } else if artist?.isVerified == true {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.piumsSuccess)
+                    } else {
+                        Image(systemName: "chevron.right")
+                            .font(.caption2).foregroundColor(.secondary)
+                    }
+                }
+                .padding(.horizontal, 16).padding(.vertical, 14)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .foregroundStyle(.primary)
+            rowDivider
+            settingsRow("Notificaciones",           icon: "bell")               {}
+            rowDivider
+            settingsRow("Privacidad",               icon: "hand.raised")        {}
+            rowDivider
+            settingsRow("Ayuda y Soporte",          icon: "questionmark.circle") {}
+            rowDivider
+            Button(role: .destructive) { AuthService.shared.logout() } label: {
+                HStack {
+                    Spacer()
+                    Text("Cerrar Sesión").font(.subheadline.weight(.medium))
+                    Spacer()
+                }
+                .padding(.horizontal, 16).padding(.vertical, 14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
         .background(Color(.tertiarySystemGroupedBackground))
         .cornerRadius(16)
         .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
     }
 
-    private var verificationRow: some View {
-        Button { showVerificacion = true } label: {
-            HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 7)
-                        .fill(Color.piumsOrange)
-                        .frame(width: 30, height: 30)
-                    Image(systemName: "shield.checkered")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.white)
-                }
-                Text("Verificación de Identidad")
-                    .font(.subheadline)
-                    .foregroundColor(.primary)
-                Spacer()
-                if authService.needsVerification {
-                    Text("Pendiente")
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 8).padding(.vertical, 3)
-                        .background(Color.piumsError)
-                        .clipShape(Capsule())
-                } else if artist?.isVerified == true {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.piumsSuccess)
-                        .font(.subheadline)
-                } else {
-                    Image(systemName: "chevron.right").font(.caption2).foregroundColor(.secondary)
-                }
-            }
-            .padding(.horizontal, 16).padding(.vertical, 13)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
+    private var rowDivider: some View {
+        Divider().padding(.leading, 16)
     }
 
-    private func settingsRow(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
+    private func settingsRow(_ label: String, icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 7).fill(color).frame(width: 30, height: 30)
-                    Image(systemName: icon)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.white)
-                }
-                Text(label)
-                    .font(.subheadline)
-                    .foregroundColor(label == "Cerrar Sesión" ? .piumsError : .primary)
+            HStack(spacing: 12) {
+                Image(systemName: icon).frame(width: 22)
+                Text(label).font(.subheadline)
                 Spacer()
-                if label != "Cerrar Sesión" {
-                    Image(systemName: "chevron.right").font(.caption2).foregroundColor(.secondary)
-                }
+                Image(systemName: "chevron.right").font(.caption2).foregroundColor(.secondary)
             }
-            .padding(.horizontal, 16).padding(.vertical, 13)
+            .padding(.horizontal, 16).padding(.vertical, 14)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .foregroundStyle(.primary)
     }
 }
 
