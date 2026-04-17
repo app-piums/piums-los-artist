@@ -428,23 +428,175 @@ struct BookingRowCard: View {
 // MARK: - Notifications Sheet
 struct NotificationsSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var vm = NotificationsViewModel()
 
     var body: some View {
         NavigationView {
-            PiumsEmptyState(
-                icon: "bell.slash",
-                title: "Sin notificaciones",
-                message: "No tienes notificaciones pendientes en este momento",
-                primaryAction: PiumsEmptyState.ActionConfig("Cerrar") { dismiss() }
-            )
-            .navigationTitle("Notificaciones")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Cerrar") { dismiss() }.foregroundColor(.piumsOrange)
+            Group {
+                if vm.isLoading {
+                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if vm.notifications.isEmpty {
+                    PiumsEmptyState(
+                        icon: "bell.slash",
+                        title: "Sin notificaciones",
+                        message: "No tienes notificaciones pendientes en este momento",
+                        primaryAction: PiumsEmptyState.ActionConfig("Cerrar") { dismiss() }
+                    )
+                } else {
+                    List {
+                        ForEach(vm.notifications) { notif in
+                            NotificationRow(notification: notif)
+                                .listRowBackground(Color(.tertiarySystemGroupedBackground))
+                                .onTapGesture { Task { await vm.markRead(notif.id) } }
+                        }
+                    }
+                    .listStyle(.insetGrouped)
+                    .scrollContentBackground(.hidden)
+                    .background(Color(.secondarySystemGroupedBackground).ignoresSafeArea())
                 }
             }
+            .navigationTitle("Notificaciones")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color(.secondarySystemGroupedBackground), for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cerrar") { dismiss() }.foregroundColor(.piumsOrange)
+                }
+                if !vm.notifications.filter({ !$0.isRead }).isEmpty {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("Leer todo") { Task { await vm.markAllRead() } }
+                            .font(.subheadline)
+                            .foregroundColor(.piumsOrange)
+                    }
+                }
+            }
+            .task { await vm.load() }
         }
+    }
+}
+
+// MARK: - Notification Row
+private struct NotificationRow: View {
+    let notification: NotificationsViewModel.NotificationItem
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(notification.iconColor.opacity(0.15))
+                    .frame(width: 40, height: 40)
+                Image(systemName: notification.iconName)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(notification.iconColor)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(notification.title)
+                        .font(.subheadline.weight(notification.isRead ? .regular : .semibold))
+                        .foregroundColor(.primary)
+                    Spacer()
+                    if !notification.isRead {
+                        Circle().fill(Color.piumsOrange).frame(width: 8, height: 8)
+                    }
+                }
+                Text(notification.message)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+                Text(notification.relativeTime)
+                    .font(.caption2)
+                    .foregroundColor(.secondary.opacity(0.7))
+            }
+        }
+        .padding(.vertical, 6)
+        .opacity(notification.isRead ? 0.65 : 1)
+    }
+}
+
+// MARK: - Notifications ViewModel
+@MainActor
+final class NotificationsViewModel: ObservableObject {
+    @Published var notifications: [NotificationItem] = []
+    @Published var isLoading = false
+
+    struct NotificationItem: Identifiable {
+        let id: String
+        let title: String
+        let message: String
+        var isRead: Bool
+        let type: String
+        let createdAt: Date
+
+        var iconName: String {
+            switch type {
+            case "BOOKING_CONFIRMED":  return "calendar.badge.checkmark"
+            case "BOOKING_CANCELLED":  return "calendar.badge.minus"
+            case "PAYMENT_RECEIVED":   return "dollarsign.circle.fill"
+            case "REVIEW_RECEIVED":    return "star.fill"
+            case "MESSAGE_RECEIVED":   return "bubble.left.fill"
+            default:                   return "bell.fill"
+            }
+        }
+
+        var iconColor: Color {
+            switch type {
+            case "BOOKING_CONFIRMED":  return .piumsSuccess
+            case "BOOKING_CANCELLED":  return .piumsError
+            case "PAYMENT_RECEIVED":   return .piumsOrange
+            case "REVIEW_RECEIVED":    return .yellow
+            case "MESSAGE_RECEIVED":   return .piumsInfo
+            default:                   return .secondary
+            }
+        }
+
+        var relativeTime: String {
+            let diff = Date().timeIntervalSince(createdAt)
+            if diff < 60 { return "Ahora" }
+            if diff < 3600 { return "Hace \(Int(diff/60)) min" }
+            if diff < 86400 { return "Hace \(Int(diff/3600)) h" }
+            return "Hace \(Int(diff/86400)) días"
+        }
+    }
+
+    func load() async {
+        isLoading = true
+        do {
+            let dtos = try await APIService.shared.get(
+                endpoint: .notifications(unread: nil, page: 1),
+                responseType: [NotificationDTO].self
+            )
+            notifications = dtos.map { dto in
+                let iso = ISO8601DateFormatter()
+                iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                let iso2 = ISO8601DateFormatter()
+                let date = iso.date(from: dto.createdAt) ?? iso2.date(from: dto.createdAt) ?? Date()
+                return NotificationItem(id: dto.id, title: dto.title, message: dto.message,
+                                        isRead: dto.read, type: dto.type, createdAt: date)
+            }
+        } catch { }
+        isLoading = false
+    }
+
+    func markRead(_ id: String) async {
+        guard let idx = notifications.firstIndex(where: { $0.id == id }),
+              !notifications[idx].isRead else { return }
+        notifications[idx].isRead = true
+        try? await APIService.shared.request(
+            endpoint: .markNotificationRead(id),
+            method: .PATCH,
+            responseType: EmptyResponseDTO.self
+        )
+    }
+
+    func markAllRead() async {
+        notifications.indices.forEach { notifications[$0].isRead = true }
+        try? await APIService.shared.request(
+            endpoint: .markAllNotificationsRead,
+            method: .PATCH,
+            responseType: EmptyResponseDTO.self
+        )
     }
 }
 
