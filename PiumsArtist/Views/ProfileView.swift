@@ -360,6 +360,9 @@ struct SettingsView: View {
     @State private var showEditProfile = false
     @State private var showChangePassword = false
     @State private var showDisputas = false
+    @State private var showTerminos = false
+    @State private var showPrivacidad = false
+    @State private var showSoporte = false
 
     @State private var editName = ""
     @State private var editPhone = ""
@@ -446,7 +449,9 @@ struct SettingsView: View {
                     Button { showDisputas = true } label: {
                         Label("Mis quejas", systemImage: "exclamationmark.bubble")
                     }
-                    Label("Términos y condiciones",   systemImage: "doc.text")
+                    Button { showTerminos = true } label: {
+                        Label("Términos y condiciones", systemImage: "doc.text")
+                    }
                     Label("Política de privacidad",   systemImage: "hand.raised")
                     Label("Contactar soporte",        systemImage: "message")
                 }
@@ -473,6 +478,7 @@ struct SettingsView: View {
             .sheet(isPresented: $showEditProfile) { editProfileSheet }
             .sheet(isPresented: $showChangePassword) { changePasswordSheet }
             .sheet(isPresented: $showDisputas) { DisputasView().presentationDetents([.large]) }
+            .sheet(isPresented: $showTerminos) { LegalTextSheet(title: "Términos y condiciones", systemImage: "doc.text") }
         }
         .preferredColorScheme(themeManager.colorScheme)
     }
@@ -574,6 +580,56 @@ struct SettingsView: View {
             showChangePassword = false
         } catch { errorMessage = error.localizedDescription }
         isSaving = false
+    }
+}
+
+// MARK: - Legal Text Sheet (reutilizable para Términos y Privacidad)
+
+struct LegalTextSheet: View {
+    let title: String
+    let systemImage: String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 24) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.piumsOrange.opacity(0.12))
+                            .frame(width: 72, height: 72)
+                        Image(systemName: systemImage)
+                            .font(.system(size: 32))
+                            .foregroundColor(.piumsOrange)
+                    }
+                    .padding(.top, 20)
+
+                    Text("Este documento estará disponible en piums.com. Por el momento puedes consultarlo en nuestra página web oficial.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+
+                    Link("Visitar piums.com", destination: URL(string: "https://piums.com")!)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.piumsOrange)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color.piumsOrange.opacity(0.1))
+                        .cornerRadius(12)
+                        .padding(.horizontal, 32)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .background(Color(.secondarySystemGroupedBackground).ignoresSafeArea())
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cerrar") { dismiss() }
+                }
+            }
+        }
     }
 }
 
