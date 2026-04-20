@@ -12,8 +12,38 @@ struct RegisterRequest: Codable {
     let email: String
     let password: String
     let name: String
-    let role: String // CLIENT, ARTIST, ADMIN
+    let role: String
     let phone: String?
+
+    // Send both "name" and "nombre" because backend may use either field
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(email, forKey: .email)
+        try c.encode(password, forKey: .password)
+        try c.encode(name, forKey: .name)
+        try c.encode(name, forKey: .nombre)
+        try c.encode(role, forKey: .role)
+        try c.encodeIfPresent(phone, forKey: .phone)
+    }
+
+    init(email: String, password: String, name: String, role: String, phone: String?) {
+        self.email = email; self.password = password; self.name = name
+        self.role = role; self.phone = phone
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        email    = try c.decode(String.self, forKey: .email)
+        password = try c.decode(String.self, forKey: .password)
+        let rawName = (try? c.decode(String.self, forKey: .name)) ?? (try? c.decode(String.self, forKey: .nombre)) ?? ""
+        name = rawName
+        role     = try c.decode(String.self, forKey: .role)
+        phone    = try c.decodeIfPresent(String.self, forKey: .phone)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case email, password, name, nombre, role, phone
+    }
 }
 
 struct LoginRequest: Codable {
@@ -813,11 +843,31 @@ struct ReviewPhotoDTO: Codable {
     let caption: String?
 }
 
+struct ReviewsListPaginationDTO: Codable {
+    let page: Int
+    let limit: Int?
+    let total: Int
+    let totalPages: Int
+}
+
 struct ReviewsListResponseDTO: Codable {
     let reviews: [ReviewDetailedDTO]
-    let total: Int
-    let page: Int
-    let totalPages: Int
+    let pagination: ReviewsListPaginationDTO?
+    // Legacy flat fields (in case backend shape changes)
+    private let _total: Int?
+    private let _page: Int?
+    private let _totalPages: Int?
+
+    var total: Int { pagination?.total ?? _total ?? 0 }
+    var page: Int { pagination?.page ?? _page ?? 1 }
+    var totalPages: Int { pagination?.totalPages ?? _totalPages ?? 1 }
+
+    enum CodingKeys: String, CodingKey {
+        case reviews, pagination
+        case _total = "total"
+        case _page = "page"
+        case _totalPages = "totalPages"
+    }
 }
 
 struct RespondToReviewRequest: Codable {
@@ -862,7 +912,7 @@ struct AddDisputeMessageRequest: Codable {
 }
 
 struct CreateDisputeRequest: Codable {
-    let bookingId: String?
+    let bookingId: String
     let disputeType: String
     let subject: String
     let description: String

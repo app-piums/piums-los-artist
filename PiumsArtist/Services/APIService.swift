@@ -77,7 +77,7 @@ enum APIEndpoint {
     case createService
     case serviceById(String)
     case updateService(String)
-    case deleteService(String)
+    case deleteService(String, artistId: String)
     case toggleServiceStatus(String)
     case serviceCategories
     
@@ -259,8 +259,8 @@ enum APIEndpoint {
             return "/catalog/services/\(id)"
         case .updateService(let id):
             return "/catalog/services/\(id)"
-        case .deleteService(let id):
-            return "/catalog/services/\(id)"
+        case .deleteService(let id, let artistId):
+            return "/catalog/services/\(id)?artistId=\(artistId)"
         case .toggleServiceStatus(let id):
             return "/catalog/services/\(id)/toggle-status"
         case .serviceCategories:
@@ -318,7 +318,7 @@ enum APIEndpoint {
         case .deleteReview(let id):
             return "/reviews/\(id)"
         case .respondToReview(let id):
-            return "/reviews/reviews/\(id)/respond"
+            return "/reviews/\(id)/respond"
         case .markReviewHelpful(let id):
             return "/reviews/\(id)/helpful"
             
@@ -371,14 +371,13 @@ enum APIEndpoint {
         case .markConversationRead(let id):
             return "/chat/conversations/\(id)/read"
             
-        // Reviews — el gateway enruta /reviews → reviews-service, que expone /reviews
         case .reviewsList(let artistId, let page):
-            var path = "/reviews/reviews"
+            var path = "/reviews"
             var params = ["artistId=\(artistId)"]
             if let page = page { params.append("page=\(page)") }
             return path + "?" + params.joined(separator: "&")
         case .reportReview(let id):
-            return "/reviews/reviews/\(id)/report"
+            return "/reviews/\(id)/report"
 
         // Disputes
         case .myDisputes:

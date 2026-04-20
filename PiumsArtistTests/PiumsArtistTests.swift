@@ -87,14 +87,20 @@ final class PiumsArtistTests: XCTestCase {
     // MARK: - SEC-03 — Logout clears artist_backend_id
 
     func testLogoutClearsArtistBackendId() {
+        // Null the singleton token first to stop any background auto-login task
+        // that could race and write auth_token back during the test.
+        APIService.shared.authToken = nil
+        UserDefaults.standard.removeObject(forKey: "refresh_token")
+
+        // Set up state
         UserDefaults.standard.set("artist-123", forKey: "artist_backend_id")
-        UserDefaults.standard.set("token-abc", forKey: "auth_token")
+        APIService.shared.authToken = "token-abc"       // via setter → writes auth_token
         UserDefaults.standard.set("refresh-xyz", forKey: "refresh_token")
 
         // Simulate what logout does
         UserDefaults.standard.removeObject(forKey: "refresh_token")
         UserDefaults.standard.removeObject(forKey: "artist_backend_id")
-        UserDefaults.standard.removeObject(forKey: "auth_token")
+        APIService.shared.authToken = nil               // via setter → removes auth_token
 
         XCTAssertNil(UserDefaults.standard.string(forKey: "artist_backend_id"), "artist_backend_id must be cleared on logout")
         XCTAssertNil(UserDefaults.standard.string(forKey: "auth_token"),        "auth_token must be cleared on logout")

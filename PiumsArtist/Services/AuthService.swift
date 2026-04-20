@@ -104,6 +104,12 @@ final class AuthService: ObservableObject {
                 body: request,
                 responseType: AuthResponse.self
             )
+            let role = (response.user.role ?? "").lowercased()
+            guard role == "artist" || role == "artista" else {
+                errorMessage = "Esta cuenta no tiene permisos de artista. Contacta a soporte@piums.io para activar tu cuenta."
+                isLoading = false
+                return
+            }
             apiService.authToken = response.token
             if let refreshToken = response.refreshToken {
                 UserDefaults.standard.set(refreshToken, forKey: "refresh_token")

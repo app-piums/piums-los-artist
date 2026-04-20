@@ -382,18 +382,16 @@ final class ServicesViewModel: ObservableObject {
     // MARK: - CRUD
 
     func deleteService(_ service: Service) async {
-        guard !service.remoteId.isEmpty else {
-            print("⚠️ deleteService: remoteId vacío — el servicio no tiene ID del backend")
-            return
-        }
+        guard !service.remoteId.isEmpty else { return }
+        let artistId = cachedArtistId.isEmpty
+            ? (AuthService.shared.artistBackendId ?? "") : cachedArtistId
         isLoading = true
         do {
             let _ = try await apiService.request(
-                endpoint: .deleteService(service.remoteId),
+                endpoint: .deleteService(service.remoteId, artistId: artistId),
                 method: .DELETE,
                 responseType: EmptyResponseDTO.self
             )
-            print("✅ Servicio eliminado")
             await loadServices()
         } catch {
             self.errorMessage = error.localizedDescription
@@ -403,11 +401,16 @@ final class ServicesViewModel: ObservableObject {
 
     func toggleServiceStatus(_ service: Service) async {
         guard !service.remoteId.isEmpty else { return }
+        let artistId = cachedArtistId.isEmpty
+            ? (AuthService.shared.artistBackendId ?? "") : cachedArtistId
         isLoading = true
         do {
+            struct ToggleBody: Encodable { let artistId: String }
+            let body = try JSONEncoder().encode(AnyEncodable(ToggleBody(artistId: artistId)))
             let _ = try await apiService.request(
                 endpoint: .toggleServiceStatus(service.remoteId),
                 method: .PATCH,
+                body: body,
                 responseType: ServiceDTO.self
             )
             await loadServices()

@@ -60,7 +60,7 @@ final class DisputasViewModel: ObservableObject {
     func refreshData() async { await loadDisputes() }
 
     @MainActor
-    func createDispute(type: String, subject: String, description: String, bookingId: String?) async -> Bool {
+    func createDispute(type: String, subject: String, description: String, bookingId: String) async -> Bool {
         let body = CreateDisputeRequest(
             bookingId: bookingId,
             disputeType: type,
@@ -609,7 +609,7 @@ struct StatusUpdateBubble: View {
 // MARK: - New Disputa Sheet
 
 struct NewDisputaSheet: View {
-    let onSubmit: (String, String, String, String?) -> Void
+    let onSubmit: (String, String, String, String) -> Void
     @Environment(\.dismiss) private var dismiss
 
     private let disputeTypes: [(String, String)] = [
@@ -625,11 +625,13 @@ struct NewDisputaSheet: View {
     @State private var selectedType = "OTHER"
     @State private var subject = ""
     @State private var description = ""
+    @State private var bookingId = ""
     @State private var isSubmitting = false
 
     private var canSubmit: Bool {
         subject.trimmingCharacters(in: .whitespaces).count >= 5 &&
-        description.trimmingCharacters(in: .whitespaces).count >= 10
+        description.trimmingCharacters(in: .whitespaces).count >= 10 &&
+        !bookingId.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     var body: some View {
@@ -643,6 +645,17 @@ struct NewDisputaSheet: View {
                     }
                     .pickerStyle(.menu)
                     .tint(.piumsOrange)
+                }
+
+                Section {
+                    TextField("Ej. PIU-2026-000013", text: $bookingId)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.characters)
+                } header: {
+                    Text("Código de reserva")
+                } footer: {
+                    Text("Puedes encontrarlo en la sección Reservas.")
+                        .font(.caption)
                 }
 
                 Section("Asunto") {
@@ -675,7 +688,7 @@ struct NewDisputaSheet: View {
                     } else {
                         Button("Enviar") {
                             isSubmitting = true
-                            onSubmit(selectedType, subject, description, nil)
+                            onSubmit(selectedType, subject, description, bookingId.trimmingCharacters(in: .whitespaces))
                         }
                         .fontWeight(.semibold)
                         .foregroundColor(canSubmit ? .piumsOrange : .secondary)
