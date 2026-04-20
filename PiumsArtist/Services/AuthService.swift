@@ -379,6 +379,7 @@ struct LoginView: View {
     @State private var password = ""
     @State private var showPassword = false
     @State private var showRegister = false
+    @State private var showForgotPassword = false
     @State private var animateIn = false
     @State private var glowPulse = false
 
@@ -410,6 +411,7 @@ struct LoginView: View {
             Text(authService.errorMessage ?? "")
         }
         .fullScreenCover(isPresented: $showRegister) { RegisterView() }
+        .sheet(isPresented: $showForgotPassword) { ForgotPasswordView() }
     }
 
     // MARK: - Background
@@ -676,7 +678,7 @@ struct LoginView: View {
 
             HStack {
                 Spacer()
-                Button("¿Olvidaste tu contraseña?") {}
+                Button("¿Olvidaste tu contraseña?") { showForgotPassword = true }
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(Color.piumsOrange)
             }

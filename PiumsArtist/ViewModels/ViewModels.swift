@@ -84,29 +84,12 @@ final class DashboardViewModel: ObservableObject {
             
         } catch {
             self.errorMessage = error.localizedDescription
-            loadMockData()
         }
         isLoading = false
     }
 
     private func resolveArtistProfileId() async throws -> String? {
         return nil
-    }
-
-    private func loadMockData() {
-        let calendar = Calendar.current
-        let today = Date()
-        todayBookings = [
-            Booking(clientName: "María García", clientEmail: "maria@email.com", scheduledDate: today, duration: 60, totalPrice: 45, status: .confirmed),
-            Booking(clientName: "Ana López", clientEmail: "ana@email.com", scheduledDate: calendar.date(byAdding: .hour, value: 2, to: today) ?? today, duration: 90, totalPrice: 65, status: .pending)
-        ]
-        pendingBookings = todayBookings.filter { $0.status == .pending }
-        completedBookings = []
-        monthlyEarnings = 0
-        totalEarnings = 0
-        totalBookings = 0
-        pendingCount = pendingBookings.count
-        confirmedCount = todayBookings.filter { $0.status == .confirmed }.count
     }
 
     private var currencyFormatter: NumberFormatter {
@@ -315,15 +298,6 @@ final class BookingsViewModel: ObservableObject {
         }
     }
 
-    private func loadMockData() {
-        let calendar = Calendar.current
-        let today = Date()
-        bookings = [
-            Booking(clientName: "María García", clientEmail: "maria@email.com", scheduledDate: today, duration: 60, totalPrice: 45, status: .confirmed),
-            Booking(clientName: "Ana López", clientEmail: "ana@email.com", scheduledDate: calendar.date(byAdding: .hour, value: 2, to: today) ?? today, duration: 90, totalPrice: 65, status: .pending)
-        ]
-        applyFilter()
-    }
 }
 
 // MARK: - Calendar ViewModel
@@ -493,20 +467,10 @@ final class CalendarViewModel: ObservableObject {
     private func loadMockAvailability() {
         let calendar = Calendar.current
         let today = Date()
-        
-        // Generate availability for next 30 days
         for i in 0..<30 {
             if let date = calendar.date(byAdding: .day, value: i, to: today) {
                 let dayStart = calendar.startOfDay(for: date)
-                
-                availability[dayStart] = [
-                    TimeSlot(time: "9:00 AM", isAvailable: true, isBooked: i % 3 == 0),
-                    TimeSlot(time: "10:30 AM", isAvailable: true, isBooked: false),
-                    TimeSlot(time: "12:00 PM", isAvailable: i % 2 == 0, isBooked: false),
-                    TimeSlot(time: "2:00 PM", isAvailable: true, isBooked: i % 4 == 0),
-                    TimeSlot(time: "3:30 PM", isAvailable: true, isBooked: false),
-                    TimeSlot(time: "5:00 PM", isAvailable: i % 3 != 0, isBooked: false)
-                ]
+                availability[dayStart] = defaultSlots(for: dayStart, blocked: false)
             }
         }
     }
@@ -715,47 +679,6 @@ final class MessagesViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Mock fallback
-
-    private func loadMockConversations() {
-        let cal = Calendar.current
-        conversations = [
-            ConversationItem(
-                conversationId: "mock-1",
-                stableId: UUID(),
-                clientName: "María García",
-                clientEmail: "maria.garcia@email.com",
-                lastMessage: "¡Perfecto! Nos vemos mañana a las 10:00",
-                timestamp: Date(),
-                unreadCount: 0,
-                isOnline: true,
-                status: "ACTIVE",
-                messages: [
-                    MessageItem(content: "Hola, ¿tienes disponibilidad para mañana?",
-                                isFromArtist: false,
-                                timestamp: cal.date(byAdding: .hour, value: -2, to: Date()) ?? Date(),
-                                isRead: true),
-                    MessageItem(content: "¡Hola! Sí, tengo disponibilidad. ¿A qué hora te vendría bien?",
-                                isFromArtist: true,
-                                timestamp: cal.date(byAdding: .hour, value: -1, to: Date()) ?? Date(),
-                                isRead: true)
-                ]
-            ),
-            ConversationItem(
-                conversationId: "mock-2",
-                stableId: UUID(),
-                clientName: "Ana López",
-                clientEmail: "ana.lopez@email.com",
-                lastMessage: "¿Podrías confirmar la cita?",
-                timestamp: cal.date(byAdding: .hour, value: -2, to: Date()) ?? Date(),
-                unreadCount: 2,
-                isOnline: false,
-                status: "PENDING",
-                messages: []
-            )
-        ]
-        filterConversations()
-    }
 }
 
 // MARK: - Profile ViewModel
@@ -853,38 +776,13 @@ final class ProfileViewModel: ObservableObject {
             
         } catch {
             self.errorMessage = error.localizedDescription
-            loadMockData()
         }
-        
+
         isLoading = false
     }
 
     private func resolveArtistProfileId() async throws -> String? {
         return nil
-    }
-
-    private func extractEmailFromToken(_ token: String?) -> String? {
-        guard let token = token else { return nil }
-        let parts = token.split(separator: ".")
-        guard parts.count == 3 else { return nil }
-        var b64 = String(parts[1])
-        let rem = b64.count % 4
-        if rem > 0 { b64 += String(repeating: "=", count: 4 - rem) }
-        b64 = b64.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
-        guard let data = Data(base64Encoded: b64),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-        return json["email"] as? String
-    }
-
-    private func loadMockData() {
-        artist = Artist.preview
-        services = Service.previewServices
-        statistics = ProfileStatistics(
-            totalClients: 0,
-            completedServices: 0,
-            monthlyEarnings: 0,
-            averageRating: artist?.rating ?? 0
-        )
     }
 }
 

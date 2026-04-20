@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import PhotosUI
 
 // MARK: - Profile View
 
@@ -15,7 +16,11 @@ struct ProfileView: View {
     @State private var showingSettings = false
     @State private var showVerificacion = false
     @State private var showEditProfile = false
-    @State private var showPhotoAlert = false
+    @State private var showPrivacidad = false
+    @State private var showSoporte = false
+    @State private var showPhotoPicker = false
+    @State private var photoItem: PhotosPickerItem?
+    @State private var isUploadingPhoto = false
 
     private var artist: Artist? { vm.artist ?? AuthService.shared.currentArtist }
 
@@ -39,11 +44,8 @@ struct ProfileView: View {
             .toolbarBackground(.visible, for: .navigationBar)
             .refreshable { await vm.refreshData() }
             .sheet(isPresented: $showEditProfile) { EditArtistProfileSheet() }
-            .alert("Foto de perfil", isPresented: $showPhotoAlert) {
-                Button("Entendido", role: .cancel) {}
-            } message: {
-                Text("La subida de foto de perfil estará disponible en una próxima actualización.")
-            }
+            .sheet(isPresented: $showPrivacidad) { LegalTextSheet(title: "Política de privacidad", systemImage: "hand.raised") }
+            .sheet(isPresented: $showSoporte) { ContactSoporteSheet() }
             .sheet(isPresented: $showingSettings) {
                 SettingsView().environmentObject(ThemeManager.shared)
             }
@@ -51,6 +53,11 @@ struct ProfileView: View {
                 VerificacionView(onComplete: {
                     authService.needsVerification = false
                 })
+            }
+            .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
+            .onChange(of: photoItem) { _, item in
+                guard let item else { return }
+                Task { await uploadPhoto(item) }
             }
             .overlay {
                 if vm.isLoading && vm.artist == nil {
@@ -71,14 +78,21 @@ struct ProfileView: View {
                 gradientColors: [.piumsOrange, .piumsAccent]
             )
             .overlay(alignment: .bottomTrailing) {
-                Button { showPhotoAlert = true } label: {
-                    Image(systemName: "camera.fill")
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(.white)
-                        .frame(width: 28, height: 28)
-                        .background(Color.piumsOrange)
-                        .clipShape(Circle())
+                Button { showPhotoPicker = true } label: {
+                    ZStack {
+                        if isUploadingPhoto {
+                            ProgressView().scaleEffect(0.7).tint(.white)
+                        } else {
+                            Image(systemName: "camera.fill")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .frame(width: 28, height: 28)
+                    .background(Color.piumsOrange)
+                    .clipShape(Circle())
                 }
+                .disabled(isUploadingPhoto)
                 .offset(x: 4, y: 4)
             }
 
@@ -231,11 +245,15 @@ struct ProfileView: View {
             .buttonStyle(.plain)
             .foregroundStyle(.primary)
             rowDivider
-            settingsRow("Notificaciones",           icon: "bell")               {}
+            settingsRow("Notificaciones",           icon: "bell") {
+                if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
             rowDivider
-            settingsRow("Privacidad",               icon: "hand.raised")        {}
+            settingsRow("Privacidad",               icon: "hand.raised")        { showPrivacidad = true }
             rowDivider
-            settingsRow("Ayuda y Soporte",          icon: "questionmark.circle") {}
+            settingsRow("Ayuda y Soporte",          icon: "questionmark.circle") { showSoporte = true }
             rowDivider
             Button(role: .destructive) { AuthService.shared.logout() } label: {
                 HStack {
@@ -270,6 +288,39 @@ struct ProfileView: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(.primary)
+    }
+
+    // MARK: - Photo upload
+    private func uploadPhoto(_ item: PhotosPickerItem) async {
+        guard let data = try? await item.loadTransferable(type: Data.self),
+              let image = UIImage(data: data),
+              let jpeg = image.jpegData(compressionQuality: 0.75) else {
+            photoItem = nil; return
+        }
+        isUploadingPhoto = true
+        defer { isUploadingPhoto = false; photoItem = nil }
+
+        guard let url = URL(string: APIConfig.currentURL + APIEndpoint.uploadAvatar.path) else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        if let token = APIService.shared.authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        let boundary = UUID().uuidString
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"avatar\"; filename=\"avatar.jpg\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
+        body.append(jpeg)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = body
+
+        if let (_, response) = try? await URLSession.shared.data(for: request),
+           let http = response as? HTTPURLResponse, http.statusCode < 300 {
+            await vm.refreshData()
+        }
     }
 }
 

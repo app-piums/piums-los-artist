@@ -130,6 +130,7 @@ enum APIEndpoint {
 
     // Disputes
     case myDisputes
+    case createDispute
     case disputeById(String)
     case addDisputeMessage(String)
 
@@ -382,6 +383,8 @@ enum APIEndpoint {
         // Disputes
         case .myDisputes:
             return "/disputes/me"
+        case .createDispute:
+            return "/disputes"
         case .disputeById(let id):
             return "/disputes/\(id)"
         case .addDisputeMessage(let id):

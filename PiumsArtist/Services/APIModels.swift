@@ -860,3 +860,10 @@ struct MyDisputesResponseDTO: Codable {
 struct AddDisputeMessageRequest: Codable {
     let message: String
 }
+
+struct CreateDisputeRequest: Codable {
+    let bookingId: String?
+    let disputeType: String
+    let subject: String
+    let description: String
+}

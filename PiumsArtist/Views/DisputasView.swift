@@ -60,6 +60,28 @@ final class DisputasViewModel: ObservableObject {
     func refreshData() async { await loadDisputes() }
 
     @MainActor
+    func createDispute(type: String, subject: String, description: String, bookingId: String?) async -> Bool {
+        let body = CreateDisputeRequest(
+            bookingId: bookingId,
+            disputeType: type,
+            subject: subject,
+            description: description
+        )
+        do {
+            let _ = try await api.post(
+                endpoint: .createDispute,
+                body: body,
+                responseType: DisputeDTO.self
+            )
+            await loadDisputes()
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    @MainActor
     func loadDisputes() async {
         isLoading = true
         errorMessage = nil
@@ -83,6 +105,7 @@ final class DisputasViewModel: ObservableObject {
 
 struct DisputasView: View {
     @StateObject private var vm = DisputasViewModel()
+    @State private var showNewDisputa = false
 
     var body: some View {
         NavigationView {
@@ -100,6 +123,25 @@ struct DisputasView: View {
             .navigationTitle("Mis Quejas")
             .navigationBarTitleDisplayMode(.large)
             .refreshable { await vm.refreshData() }
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showNewDisputa = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.body.weight(.semibold))
+                            .foregroundColor(.piumsOrange)
+                    }
+                }
+            }
+            .sheet(isPresented: $showNewDisputa) {
+                NewDisputaSheet { type, subject, desc, bookingId in
+                    Task {
+                        let ok = await vm.createDispute(type: type, subject: subject, description: desc, bookingId: bookingId)
+                        if ok { showNewDisputa = false }
+                    }
+                }
+            }
         }
         .navigationViewStyle(.stack)
     }
@@ -561,6 +603,87 @@ struct StatusUpdateBubble: View {
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 4)
+    }
+}
+
+// MARK: - New Disputa Sheet
+
+struct NewDisputaSheet: View {
+    let onSubmit: (String, String, String, String?) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    private let disputeTypes: [(String, String)] = [
+        ("CANCELLATION",   "Cancelación"),
+        ("QUALITY",        "Calidad del servicio"),
+        ("NO_SHOW",        "Cliente no se presentó"),
+        ("PRICING",        "Problema con el precio"),
+        ("BEHAVIOR",       "Comportamiento"),
+        ("REFUND",         "Reembolso"),
+        ("OTHER",          "Otro"),
+    ]
+
+    @State private var selectedType = "OTHER"
+    @State private var subject = ""
+    @State private var description = ""
+    @State private var isSubmitting = false
+
+    private var canSubmit: Bool {
+        subject.trimmingCharacters(in: .whitespaces).count >= 5 &&
+        description.trimmingCharacters(in: .whitespaces).count >= 10
+    }
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section("Tipo de problema") {
+                    Picker("Tipo", selection: $selectedType) {
+                        ForEach(disputeTypes, id: \.0) { type in
+                            Text(type.1).tag(type.0)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .tint(.piumsOrange)
+                }
+
+                Section("Asunto") {
+                    TextField("Resume el problema (mín. 5 caracteres)", text: $subject)
+                        .autocorrectionDisabled()
+                }
+
+                Section("Descripción") {
+                    TextField("Describe detalladamente lo que ocurrió (mín. 10 caracteres)",
+                              text: $description, axis: .vertical)
+                        .lineLimit(4...8)
+                        .autocorrectionDisabled()
+                }
+
+                Section {
+                    Text("El equipo de Piums revisará tu queja y te contactará dentro de 24-48 horas.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .navigationTitle("Nueva Queja")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancelar") { dismiss() }.foregroundColor(.secondary)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    if isSubmitting {
+                        ProgressView()
+                    } else {
+                        Button("Enviar") {
+                            isSubmitting = true
+                            onSubmit(selectedType, subject, description, nil)
+                        }
+                        .fontWeight(.semibold)
+                        .foregroundColor(canSubmit ? .piumsOrange : .secondary)
+                        .disabled(!canSubmit)
+                    }
+                }
+            }
+        }
     }
 }
 
