@@ -142,8 +142,9 @@ final class AuthService: ObservableObject {
                 storedEmail = ""
                 rememberMe = false
                 
-                // Clear stored refresh token
+                // Clear all stored session data
                 UserDefaults.standard.removeObject(forKey: "refresh_token")
+                UserDefaults.standard.removeObject(forKey: "artist_backend_id")
                 
                 // Cancel any scheduled token refresh
                 cancelTokenRefresh()

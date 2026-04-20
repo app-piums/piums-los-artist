@@ -116,11 +116,12 @@ final class BookingsViewModel: ObservableObject {
     @Published var filteredBookings: [Booking] = []
     @Published var selectedFilter: BookingFilter = .all
     @Published var isLoading = false
+    @Published var updatingBookingId: UUID? = nil
     @Published var errorMessage: String?
-    
+
     private var modelContext: ModelContext?
     private let apiService = APIService.shared
-    
+
     enum BookingFilter: String, CaseIterable {
         case all = "Todas"
         case pending = "Pendientes"
@@ -196,25 +197,24 @@ final class BookingsViewModel: ObservableObject {
     }
     
     func acceptBooking(_ booking: Booking) {
-        Task {
-            await updateBookingStatus(booking, status: "CONFIRMED")
-        }
+        guard updatingBookingId == nil else { return }
+        Task { await updateBookingStatus(booking, status: "CONFIRMED") }
     }
-    
+
     func rejectBooking(_ booking: Booking) {
-        Task {
-            await updateBookingStatus(booking, status: "CANCELLED")
-        }
+        guard updatingBookingId == nil else { return }
+        Task { await updateBookingStatus(booking, status: "CANCELLED") }
     }
-    
+
     func completeBooking(_ booking: Booking) {
-        Task {
-            await updateBookingStatus(booking, status: "COMPLETED")
-        }
+        guard updatingBookingId == nil else { return }
+        Task { await updateBookingStatus(booking, status: "COMPLETED") }
     }
-    
+
     @MainActor
     private func updateBookingStatus(_ booking: Booking, status: String) async {
+        updatingBookingId = booking.id
+        defer { updatingBookingId = nil }
         do {
             let endpoint: APIEndpoint
             let body: Data?
