@@ -234,8 +234,8 @@ Color activo del tab: `piumsOrange` (`#FF6B35`).
 - `GET /catalog/services?artistId={id}`
 - `POST /catalog/services` body: `{ artistId, name, slug, description, categoryId, pricingType, basePrice (centavos), durationMin }`
 - `PUT /catalog/services/{id}`
-- `DELETE /catalog/services/{id}`
-- `PATCH /catalog/services/{id}/toggle-status`
+- `DELETE /catalog/services/{id}?artistId={artistId}` — pasar `artistId` como **query param** (el gateway hace HTTP 308 redirect que descarta el body)
+- `PATCH /catalog/services/{id}/toggle-status` body: `{ artistId }` — requerido para autorización
 - `GET /catalog/categories`
 
 **Nota precios:** el backend usa **centavos** (`basePrice: Int`). Dividir entre 100 para mostrar. Multiplicar por 100 al enviar.
@@ -262,8 +262,11 @@ Color activo del tab: `piumsOrange` (`#FF6B35`).
 - Rating promedio en header
 
 **API:**
-- `GET /reviews/reviews?artistId={id}&page=1`
-- `POST /reviews/reviews/{id}/respond` body: `{ message }`
+- `GET /reviews?artistId={id}&page=1` → `{ reviews: [], pagination: { page, limit, total, totalPages } }`
+- `POST /reviews/{id}/respond` body: `{ message }`
+- `POST /reviews/{id}/report` body: `{ reason, description }`
+
+> ⚠️ La respuesta usa paginación **anidada** (`pagination.total`, `pagination.totalPages`), no campos planos en el nivel raíz.
 
 ---
 
@@ -277,14 +280,16 @@ Color activo del tab: `piumsOrange` (`#FF6B35`).
 - Selector de tipo (7 opciones): `SERVICE_QUALITY`, `PAYMENT_DISPUTE`, `CANCELLATION`, `NO_SHOW`, `COMMUNICATION`, `FRAUD`, `OTHER`
 - Asunto (mínimo 5 caracteres)
 - Descripción (mínimo 10 caracteres)
-- Booking ID (opcional)
-- Botón "Enviar" deshabilitado hasta que los campos sean válidos
+- Booking ID (**obligatorio** — el backend rechaza la petición sin él)
+- Botón "Enviar" deshabilitado hasta que todos los campos sean válidos (incluyendo bookingId)
 
 **API:**
 - `GET /disputes/me` → `{ asReporter: [], asReported: [], total }`
 - `GET /disputes/{id}`
 - `POST /disputes/{id}/messages` body: `{ message }`
-- `POST /disputes` body: `{ bookingId?: String, disputeType: String, subject: String, description: String }`
+- `POST /disputes` body: `{ bookingId: String, disputeType: String, subject: String, description: String }`
+
+> ⚠️ `bookingId` es **obligatorio** (no nullable). El backend devuelve error si se omite o se envía null.
 
 ---
 
@@ -306,8 +311,10 @@ Color activo del tab: `piumsOrange` (`#FF6B35`).
 - Guardar token en `EncryptedSharedPreferences` / `Keystore`
 
 ### Registro
-- `POST /auth/register` body: `{ email, password, name, role: "ARTIST", phone: null }`
+- `POST /auth/register` body: `{ email, password, name, nombre: name, role: "ARTIST", phone: null }`
+- Enviar **tanto `name` como `nombre`** con el mismo valor — el backend acepta ambos según versión.
 - Usar siempre `role: "ARTIST"` — campo obligatorio, no debe omitirse.
+- ⚠️ El backend puede ignorar el `role` enviado y asignar `"cliente"` por defecto. **Validar el rol del JWT recibido** tras el registro: si no es `artist/artista`, mostrar mensaje de error claro ("Esta cuenta no tiene permisos de artista. Contacta a soporte@piums.io") y no navegar al panel.
 
 ### Olvidé mi contraseña (flujo 2 pasos)
 **Paso 1 — Solicitar código:**
@@ -335,7 +342,7 @@ Content-Type: application/json
 
 ### Logout
 - `POST /auth/logout`
-- Borrar token local
+- Borrar **todos** los datos locales: `auth_token`, `refresh_token`, `artist_backend_id`, cualquier dato de perfil en caché.
 
 ---
 
@@ -486,6 +493,18 @@ El tour es una **superposición sobre la app real** — no pantallas separadas. 
 **Posición de la flecha:** `(screenWidth / 5) * tabIndex + (screenWidth / 10)` desde la izquierda.
 
 **Guardado de estado:** usar `SharedPreferences` para `hasCompletedTour` (no mostrar badge de "nuevo" tras completarlo).
+
+---
+
+## 12. Bugs conocidos del backend (workarounds activos)
+
+| # | Endpoint | Problema | Workaround |
+|---|----------|----------|------------|
+| 1 | `POST /auth/register` | Asigna `role: "cliente"` ignorando el campo enviado | Validar rol en JWT de respuesta; si no es `artist/artista`, mostrar error y bloquear acceso |
+| 2 | `DELETE /catalog/services/{id}` | Gateway HTTP 308 redirect descarta el body | Enviar `artistId` como query param en la URL |
+| 3 | `PATCH /catalog/services/{id}/toggle-status` | Requiere `artistId` en body para autorización | Incluir siempre `{ artistId }` en el body |
+| 4 | `GET /reviews` | Paginación anidada en `pagination{}`, no en campos raíz | Leer `response.pagination.total` y `response.pagination.totalPages` |
+| 5 | `POST /disputes` | `bookingId` requerido aunque la UI lo trate como opcional | Hacer el campo obligatorio en el formulario |
 
 ---
 
