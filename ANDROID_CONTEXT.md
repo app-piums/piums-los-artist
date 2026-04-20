@@ -208,6 +208,19 @@ Color activo del tab: `piumsOrange` (`#FF6B35`).
 - Sección "Mis Servicios"
 - Sección "Información"
 
+**Cambiar foto de perfil:**
+- Botón cámara sobre el avatar → abre el selector de imágenes nativo (MediaPicker / PhotoPicker Android)
+- Comprimir imagen a JPEG 75% antes de enviar
+- `POST /users/avatar/upload` — multipart/form-data, campo `file`
+- Response esperado: `{ url: "https://..." }` — actualizar avatar en UI
+- Mostrar spinner/indicador de carga mientras sube; deshabilitar el botón durante el upload
+- Si la respuesta no contiene `url`, intentar `imageUrl` como fallback
+
+**Sección "Configuración" (menú inferior del perfil):**
+- **Notificaciones** → abre Configuración del sistema (Settings de Android para la app), no un toggle in-app. Usar `Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)` con `EXTRA_APP_PACKAGE`.
+- **Privacidad** → bottom sheet con texto legal de política de privacidad + link a `https://piums.com`
+- **Ayuda / Soporte** → bottom sheet con email de contacto y centro de ayuda
+
 **API:** `GET /artists/dashboard/me`
 
 ---
@@ -258,11 +271,20 @@ Color activo del tab: `piumsOrange` (`#FF6B35`).
 - Lista de disputas (como reportante y reportado)
 - Detalle con hilo de mensajes
 - Añadir mensaje
+- Botón `+` en toolbar para crear nueva disputa
+
+**Crear disputa — formulario:**
+- Selector de tipo (7 opciones): `SERVICE_QUALITY`, `PAYMENT_DISPUTE`, `CANCELLATION`, `NO_SHOW`, `COMMUNICATION`, `FRAUD`, `OTHER`
+- Asunto (mínimo 5 caracteres)
+- Descripción (mínimo 10 caracteres)
+- Booking ID (opcional)
+- Botón "Enviar" deshabilitado hasta que los campos sean válidos
 
 **API:**
 - `GET /disputes/me` → `{ asReporter: [], asReported: [], total }`
 - `GET /disputes/{id}`
 - `POST /disputes/{id}/messages` body: `{ message }`
+- `POST /disputes` body: `{ bookingId?: String, disputeType: String, subject: String, description: String }`
 
 ---
 
@@ -282,6 +304,23 @@ Color activo del tab: `piumsOrange` (`#FF6B35`).
 - `POST /auth/login` body: `{ email, password }`
 - Response: `{ token, refreshToken, user: { id, email, nombre/name, role } }`
 - Guardar token en `EncryptedSharedPreferences` / `Keystore`
+
+### Registro
+- `POST /auth/register` body: `{ email, password, name, role: "ARTIST", phone: null }`
+- Usar siempre `role: "ARTIST"` — campo obligatorio, no debe omitirse.
+
+### Olvidé mi contraseña (flujo 2 pasos)
+**Paso 1 — Solicitar código:**
+- `POST /auth/forgot-password` body: `{ email }`
+- Muestra campo email con validación básica (contiene "@" y ".")
+
+**Paso 2 — Restablecer contraseña:**
+- `POST /auth/reset-password` body: `{ token, newPassword }`
+- Validaciones: contraseña mínimo 6 chars, ambas contraseñas deben coincidir
+- Botón "Ya tengo un código →" permite saltar directamente al paso 2
+- Auto-dismiss / navegación automática tras 1.8s en éxito
+
+**UI:** Usar un flujo de 2 steps en la misma pantalla (no dos pantallas separadas). Feedback de error en rojo, éxito en verde.
 
 ### Auto-login
 - Al iniciar app, leer token guardado
@@ -402,7 +441,7 @@ Fondo: `surfaceVariant` (`#1C1C1E` dark). Sin elevation/shadow visible.
 - **Estados vacíos:** ilustración con círculos concéntricos naranjas + ícono + texto + botón acción
 - **Pull to refresh** en todas las listas
 - **Feedback optimista:** al enviar mensaje, añadir al hilo localmente antes de confirmar API
-- **Fallback mock data:** si la API falla en bookings/dashboard, mostrar datos de ejemplo con banner de error
+- **Sin mock data:** si la API falla, mostrar estado vacío con mensaje de error + botón "Reintentar". NO mostrar datos falsos en Dashboard ni Perfil. En Bookings/Mensajes también mostrar vacío con error visible.
 - **Logging de red:** en DEBUG, loggear HTTP status + primeros 800 chars del JSON para diagnóstico
 
 ---
@@ -415,6 +454,38 @@ Fondo: `surfaceVariant` (`#1C1C1E` dark). Sin elevation/shadow visible.
 3. "Controla tus ingresos"
 
 Guardar `hasSeenArtistOnboarding = true` en SharedPreferences al completar.
+
+---
+
+## 11. Tour interactivo (`TutorialManager`)
+
+El tour es una **superposición sobre la app real** — no pantallas separadas. Se activa desde Más → Tutorial.
+
+**Flujo:**
+1. Sheet de introducción con grid 2×4 de 8 puntos de interés + estimado "~2 minutos"
+2. Al pulsar "Iniciar tour interactivo" → cerrar sheet → activar overlay con 450ms de delay
+3. El overlay navega automáticamente al tab correcto en cada paso
+
+**Estructura del overlay (BottomSheet fijo):**
+- Fondo oscuro semitransparente sobre el contenido (pero con la tab bar visible)
+- Flecha apuntando al tab activo del paso actual
+- Card con: número de paso, ícono circular de color, título, descripción, tip con borde
+- Dots de progreso + botones Atrás / Siguiente / ¡Listo!
+
+**Pasos y tabs (7 pasos):**
+| Paso | Tab | Título | Color sugerido |
+|---|---|---|---|
+| 1 | Inicio (0) | Dashboard | naranja |
+| 2 | Reservas (1) | Gestión de reservas | azul |
+| 3 | Agenda (2) | Tu disponibilidad | verde |
+| 4 | Mensajes (3) | Chat en tiempo real | índigo |
+| 5 | Más (4) | Tus servicios | purple |
+| 6 | Más (4) | Ausencias y viajes | cyan |
+| 7 | Más (4) | Verificación y perfil | naranja |
+
+**Posición de la flecha:** `(screenWidth / 5) * tabIndex + (screenWidth / 10)` desde la izquierda.
+
+**Guardado de estado:** usar `SharedPreferences` para `hasCompletedTour` (no mostrar badge de "nuevo" tras completarlo).
 
 ---
 
