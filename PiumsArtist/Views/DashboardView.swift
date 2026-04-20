@@ -3,8 +3,9 @@
 //  PiumsArtist
 //
 
-import SwiftUI
+import Combine
 import SwiftData
+import SwiftUI
 
 struct DashboardView: View {
     @StateObject private var viewModel = DashboardViewModel()
@@ -17,7 +18,7 @@ struct DashboardView: View {
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "EEEE, d 'de' MMMM"
-        f.locale = Locale(identifier: "es_ES")
+        f.locale = Locale(identifier: "es_GT")
         return f
     }()
 

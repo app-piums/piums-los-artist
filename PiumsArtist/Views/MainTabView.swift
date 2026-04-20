@@ -2,13 +2,12 @@
 //  MainTabView.swift
 //  PiumsArtist
 //
-//  Created by piums on 13/04/26.
-//
 
 import SwiftUI
 
 struct MainTabView: View {
     @State private var selectedTab = 0
+    @ObservedObject private var tutorial = TutorialManager.shared
 
     init() {
         let bg = UIColor.systemGroupedBackground
@@ -25,6 +24,7 @@ struct MainTabView: View {
     var body: some View {
         ZStack {
             Color(.secondarySystemGroupedBackground).ignoresSafeArea()
+
             TabView(selection: $selectedTab) {
                 NavigationStack { DashboardView() }
                     .tabItem { Label("Inicio", systemImage: "house.fill") }
@@ -49,6 +49,28 @@ struct MainTabView: View {
             .tint(.piumsOrange)
             .toolbarBackground(.ultraThinMaterial, for: .tabBar)
             .toolbarBackground(.visible, for: .tabBar)
+
+            // ── Interactive tour overlay ──
+            if tutorial.isActive {
+                TourOverlayView()
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    .zIndex(100)
+            }
+        }
+        .animation(.spring(response: 0.45, dampingFraction: 0.85), value: tutorial.isActive)
+        // Navigate to the correct tab when tutorial step changes
+        .onChange(of: tutorial.currentTabTarget) { _, newTab in
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                selectedTab = newTab
+            }
+        }
+        // Also switch tab when tour becomes active (start at tab 0)
+        .onChange(of: tutorial.isActive) { _, active in
+            if active {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                    selectedTab = tutorial.currentTabTarget
+                }
+            }
         }
     }
 }

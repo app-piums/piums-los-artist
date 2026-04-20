@@ -98,7 +98,7 @@ final class AuthService: ObservableObject {
         isLoading = true
         errorMessage = nil
         do {
-            let request = RegisterRequest(name: name, email: email, password: password)
+            let request = RegisterRequest(email: email, password: password, name: name, role: "ARTIST", phone: nil)
             let response = try await apiService.post(
                 endpoint: .register,
                 body: request,
