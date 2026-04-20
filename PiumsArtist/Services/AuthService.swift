@@ -214,18 +214,27 @@ final class AuthService: ObservableObject {
     
     func validateToken() async {
         guard let token = apiService.authToken else { return }
-        
-        // Decodificar el JWT localmente sin llamar al backend
-        // (el users-service usa un JWT_SECRET diferente al auth-service, por lo
-        // que /users/me devuelve 401 con tokens válidos del auth-service)
+
         if let user = decodeJWTUser(token: token) {
             if currentArtist == nil {
                 currentArtist = user
             }
+            // Restore artist_backend_id if missing (e.g. after app restart)
+            if artistBackendId == nil {
+                await fetchAndSaveArtistBackendId()
+            }
         } else {
-            // Token malformado o expirado → limpiar sesión
             apiService.authToken = nil
             currentArtist = nil
+        }
+    }
+
+    private func fetchAndSaveArtistBackendId() async {
+        do {
+            let dto = try await apiService.get(endpoint: .artistDashboard, responseType: ArtistProfileMinDTO.self)
+            artistBackendId = dto.artist.id
+        } catch {
+            print("[AUTH] fetchArtistBackendId error: \(error)")
         }
     }
 
@@ -347,10 +356,8 @@ final class AuthService: ObservableObject {
     // MARK: - Auto-login Support
     
     func attemptAutoLogin() async {
-        guard rememberMe && !storedEmail.isEmpty else {
-            return
-        }
-        
+        // Restore session whenever a token exists — rememberMe only controls email pre-fill
+        guard apiService.authToken != nil else { return }
         await validateToken()
     }
 }
@@ -547,57 +554,6 @@ struct LoginView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
 
-                    // Divisor
-                    HStack(spacing: 12) {
-                        Rectangle().fill(Color.piumsSeparator).frame(height: 1)
-                        Text("O CONTINUAR CON")
-                            .font(.caption.bold())
-                            .foregroundStyle(Color.piumsLabelSecondary)
-                            .tracking(0.8)
-                            .fixedSize()
-                        Rectangle().fill(Color.piumsSeparator).frame(height: 1)
-                    }
-
-                    // Social
-                    HStack(spacing: 12) {
-                        // Google
-                        Button {} label: {
-                            HStack(spacing: 10) {
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 7)
-                                        .fill(Color(.systemGray5))
-                                        .frame(width: 30, height: 30)
-                                    Text("G")
-                                        .font(.system(size: 15, weight: .bold))
-                                        .foregroundStyle(
-                                            LinearGradient(
-                                                colors: [Color(red: 0.26, green: 0.52, blue: 0.96),
-                                                         Color(red: 0.20, green: 0.66, blue: 0.33)],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
-                                        )
-                                }
-                                Text("Continuar con Google")
-                                    .font(.subheadline.weight(.medium))
-                                    .foregroundStyle(Color.piumsLabel)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 52)
-                            .background(Color.piumsBackgroundElevated)
-                            .clipShape(RoundedRectangle(cornerRadius: 13))
-                        }
-
-                        // Apple
-                        Button {} label: {
-                            Image(systemName: "applelogo")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(Color.piumsLabel)
-                                .frame(width: 52, height: 52)
-                                .background(Color.piumsBackgroundElevated)
-                                .clipShape(RoundedRectangle(cornerRadius: 13))
-                        }
-                    }
                 }
                 .padding(.horizontal, 26)
                 .padding(.bottom, 50)

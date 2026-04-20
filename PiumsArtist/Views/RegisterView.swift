@@ -133,6 +133,19 @@ struct RegisterView: View {
                             .foregroundStyle(Color.piumsLabelSecondary)
                     }
 
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: "info.circle.fill")
+                            .foregroundStyle(Color.piumsOrange)
+                            .font(.subheadline)
+                            .padding(.top, 1)
+                        Text("Tu cuenta requiere activación por el equipo de Piums. Una vez registrado recibirás confirmación a tu correo en 24-48 h.")
+                            .font(.caption)
+                            .foregroundStyle(Color.piumsLabelSecondary)
+                    }
+                    .padding(12)
+                    .background(Color.piumsOrange.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+
                     VStack(spacing: 12) {
                         inputField(label: "NOMBRE", placeholder: "Tu nombre completo",
                                    text: $name, field: .name, next: .email,

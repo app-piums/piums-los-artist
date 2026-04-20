@@ -138,6 +138,12 @@ struct CreateArtistRequest: Codable {
     let location: LocationDTO?
 }
 
+/// Mínimo necesario de GET /artists/dashboard/me para obtener el artist_backend_id
+struct ArtistProfileMinDTO: Codable {
+    struct ArtistMin: Codable { let id: String }
+    let artist: ArtistMin
+}
+
 struct ArtistDashboardDTO: Codable {
     let bookings: BookingStatsDTO
     let revenue: RevenueStatsDTO
