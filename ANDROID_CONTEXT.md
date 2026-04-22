@@ -294,12 +294,128 @@ Color activo del tab: `piumsOrange` (`#FF6B35`).
 ---
 
 ### 4.11 Verificación (`VerificacionScreen`)
-- Upload de documentos de identidad (frente, reverso, selfie)
-- Estado de verificación
+
+Se muestra como **modal dismissible** sobre `MainScreen` cuando `documentFrontUrl == null` en `/auth/me`.
+
+**Flujo de upload (3 pasos en secuencia):**
+1. Seleccionar anverso del documento → `POST /users/documents/upload?folder=front` (multipart, campo `file`)
+2. Seleccionar reverso → `POST /users/documents/upload?folder=back`
+3. Tomar selfie → `POST /users/documents/upload?folder=selfie`
+4. Guardar URLs obtenidas → `PATCH /auth/profile` body: `{ documentFrontUrl, documentBackUrl, documentSelfieUrl, documentType, documentNumber, ciudad, birthDate }`
+
+**Campos del perfil requeridos:**
+- `documentType`: `"DPI"` | `"PASSPORT"` | `"RESIDENCE_CARD"`
+- `documentNumber`: string libre
+- `ciudad`: string libre
+- `birthDate`: ISO8601 date string
+
+**Response del upload:** `{ url: "https://res.cloudinary.com/..." }` — el backend retorna la URL de Cloudinary directamente.
+
+**El reverso es opcional** — solo frente y selfie son estrictamente requeridos para considerar verificación completa.
+
+**Validar verificación:** `GET /auth/me` → `user.documentFrontUrl != null`
+
+---
+
+### 4.12 Ausencias / Vacaciones (`AbsencesScreen`)
+
+Accesible desde Más → Ausencias/Viajes. Gestiona periodos en que el artista no está disponible.
+
+**Tipos de ausencia:**
+- `VACATION` — el artista queda invisible en búsquedas globales durante ese periodo
+- `ABROAD_WORK` — el artista es visible solo en el país destino
+
+**UI:**
+- Cards de stats: "Vacaciones — Días usados" y "Extranjero — Proyectos activos"
+- Lista de ausencias activas/pasadas: fecha inicio → fin, tipo, razón, botón eliminar
+- Botón "Nueva ausencia" → bottom sheet con formulario
+- Empty state: "No hay ausencias registradas"
+
+**Formulario nueva ausencia:**
+- Tipo (selector: Vacaciones / Trabajo en extranjero)
+- Fecha inicio y fecha fin (date pickers)
+- Razón (texto libre, opcional)
+- País destino (solo si tipo = ABROAD_WORK)
 
 **API:**
-- `GET /auth/me`
-- `POST /users/documents/upload?folder={tipo}` (multipart)
+```
+GET    /artists/dashboard/me/absences
+POST   /artists/dashboard/me/absences
+DELETE /artists/dashboard/me/absences/{id}
+```
+
+**POST body:**
+```json
+{
+  "type": "VACATION" | "ABROAD_WORK",
+  "startDate": "2026-05-01T00:00:00Z",
+  "endDate": "2026-05-10T00:00:00Z",
+  "reason": "string | null",
+  "country": "Guatemala | null"
+}
+```
+
+**DTO de respuesta:**
+```kotlin
+data class AbsenceDTO(
+    val id: String,
+    val artistId: String?,
+    val type: String,           // VACATION, ABROAD_WORK
+    val startDate: String,      // ISO8601
+    val endDate: String,        // ISO8601
+    val reason: String?,
+    val country: String?,
+    val createdAt: String?
+)
+```
+
+---
+
+### 4.13 Notificaciones (`NotificationsPanel`)
+
+Panel accesible desde el ícono de campana en el top bar de cualquier pantalla principal. Se implementa como bottom sheet o panel lateral, no como pantalla separada.
+
+**Tipos de notificación y íconos:**
+| type | Ícono Material | Color |
+|---|---|---|
+| `BOOKING_CONFIRMED` | `event_available` | Verde `#10B981` |
+| `BOOKING_CANCELLED` | `event_busy` | Rojo `#EF4444` |
+| `PAYMENT_RECEIVED` | `paid` | Naranja `#FF6B35` |
+| `REVIEW_RECEIVED` | `star` | Amarillo `#F59E0B` |
+| `MESSAGE_RECEIVED` | `chat_bubble` | Azul `#3B82F6` |
+
+**Comportamiento:**
+- Badge rojo con contador en el ícono de campana cuando hay no leídas
+- Al tocar una notificación → marcarla como leída + navegar al contenido relacionado (si aplica)
+- Botón "Marcar todas como leídas"
+- Timestamps relativos: "Hace 5 min", "Hace 2 h", "Ayer"
+
+**API:**
+```
+GET   /notifications?unread=false&page=1
+PATCH /notifications/{id}/read
+PATCH /notifications/read-all
+```
+
+**DTO:**
+```kotlin
+data class NotificationDTO(
+    val id: String,
+    val userId: String,
+    val type: String,
+    val title: String,
+    val message: String,
+    val read: Boolean,
+    val data: Map<String, String>?,  // Puede incluir bookingId, reviewId, conversationId
+    val createdAt: String            // ISO8601
+)
+
+data class NotificationsResponse(
+    val notifications: List<NotificationDTO>,
+    val unreadCount: Int?,
+    val total: Int?
+)
+```
 
 ---
 
@@ -522,6 +638,19 @@ Response: {
 
 ---
 
+### Cambio de contraseña
+
+```
+PATCH /auth/change-password
+Headers: Authorization: Bearer {token}
+Body: { "currentPassword": string, "newPassword": string }
+Response: { "message": "Contraseña actualizada" }
+```
+
+Validaciones locales antes de enviar: nueva contraseña mínimo 6 caracteres, ambas contraseñas coinciden.
+
+---
+
 ### Logout
 
 ```
@@ -609,7 +738,49 @@ const val LOCAL_URL = "http://10.0.2.2:3000/api"      // Emulador Android → lo
 
 ---
 
-## 7. Modelos de datos principales
+## 7. `artistBackendId` — Persistencia y uso
+
+El `artistBackendId` es el `id` del perfil de artista en la tabla `artists` del backend. Es **distinto** del `userId` del JWT. Se usa en múltiples endpoints (servicios, reservas, bloqueos de calendario).
+
+**Cuándo obtenerlo:**
+- Primera carga de `GET /artists/dashboard/me` → guardar `response.artist.id` en `SharedPreferences`
+- Si no existe al iniciar sesión (restart de app) → llamar `GET /artists/dashboard/me` automáticamente para restaurarlo
+
+**Dónde guardarlo:**
+- `SharedPreferences` planas — no es credencial sensible
+- Clave: `"artist_backend_id"`
+
+**Cuándo borrarlo:**
+- Al hacer logout — borrar junto con tokens
+
+**Flujo de restauración al iniciar la app:**
+```kotlin
+val token = tokenStore.accessToken ?: return showLogin()
+val artistId = prefs.getString("artist_backend_id", null)
+if (artistId == null) {
+    // restaurar tras restart
+    val profile = api.getArtistDashboard()
+    prefs.edit().putString("artist_backend_id", profile.artist.id).apply()
+}
+```
+
+**`currentUserId` (del JWT) vs `artistBackendId`:**
+- `currentUserId` → campo `id` decodificado del JWT — se usa para detectar dirección de mensajes en chat (si `message.senderId == currentUserId` → burbuja derecha)
+- `artistBackendId` → ID del perfil de artista — se usa en endpoints de servicios, bloqueos, reservas
+
+```kotlin
+fun decodeUserIdFromJwt(token: String): String? {
+    val parts = token.split(".")
+    if (parts.size != 3) return null
+    val payload = Base64.decode(parts[1], Base64.URL_SAFE or Base64.NO_PADDING)
+    val json = JSONObject(String(payload))
+    return json.optString("id")
+}
+```
+
+---
+
+## 8. Modelos de datos principales
 
 ### Booking
 ```kotlin
@@ -662,9 +833,49 @@ data class ArtistProfile(
 // displayName = artistName ?: nombre ?: "Artista"
 ```
 
+### AbsenceDTO
+```kotlin
+data class AbsenceDTO(
+    val id: String,
+    val type: String,       // VACATION, ABROAD_WORK
+    val startDate: String,  // ISO8601
+    val endDate: String,    // ISO8601
+    val reason: String?,
+    val country: String?,
+    val createdAt: String?
+)
+```
+
+### NotificationDTO
+```kotlin
+data class NotificationDTO(
+    val id: String,
+    val type: String,   // BOOKING_CONFIRMED, BOOKING_CANCELLED, PAYMENT_RECEIVED, REVIEW_RECEIVED, MESSAGE_RECEIVED
+    val title: String,
+    val message: String,
+    val read: Boolean,
+    val data: Map<String, String>?,
+    val createdAt: String
+)
+```
+
+### BlockedSlotDTO
+```kotlin
+data class BlockedSlotDTO(
+    val id: String,
+    val artistId: String?,
+    val startTime: String,   // ISO8601
+    val endTime: String,     // ISO8601
+    val reason: String?,
+    val isRecurring: Boolean?
+)
+// Al cargar blocked slots, construir un Map<LocalDate, String> de fecha → slotId
+// para poder hacer DELETE /blocked-slots/{id} sin un GET adicional al desbloquear
+```
+
 ---
 
-## 8. Componentes UI reutilizables
+## 9. Componentes UI reutilizables
 
 ### PiumsAvatarView
 - Círculo con gradiente naranja → amber
@@ -689,7 +900,7 @@ Fondo: `surfaceVariant` (`#1C1C1E` dark). Sin elevation/shadow visible.
 
 ---
 
-## 9. Patrones de diseño
+## 10. Patrones de diseño y validaciones
 
 - **Modo oscuro por defecto** — ThemeManager guarda preferencia
 - **Estados vacíos:** ilustración con círculos concéntricos naranjas + ícono + texto + botón acción
@@ -698,9 +909,35 @@ Fondo: `surfaceVariant` (`#1C1C1E` dark). Sin elevation/shadow visible.
 - **Sin mock data:** si la API falla, mostrar estado vacío con mensaje de error + botón "Reintentar". NO mostrar datos falsos en Dashboard ni Perfil. En Bookings/Mensajes también mostrar vacío con error visible.
 - **Logging de red:** en DEBUG, loggear HTTP status + primeros 800 chars del JSON para diagnóstico
 
+**Validaciones de formulario (aplicar localmente antes de enviar al API):**
+
+| Campo | Regla |
+|---|---|
+| Email | Regex `^[^\s@]+@[^\s@]+\.[^\s@]+$` |
+| Contraseña (login) | No vacío |
+| Contraseña (registro/cambio) | Mínimo 6 caracteres |
+| Asunto de disputa | Mínimo 5 caracteres |
+| Descripción de disputa | Mínimo 10 caracteres |
+| Descripción de servicio | Mínimo 10 caracteres (rellenar con "." si el usuario pone menos) |
+| bookingId en disputa | Obligatorio — no nullable |
+| Precio de servicio | Se envía en centavos: `(precio * 100).toInt()` |
+
+**Formato dual de `GET /reviews`** — el backend puede devolver paginación en dos estructuras; manejar ambas:
+```kotlin
+// Forma 1 — paginación anidada (más común)
+{ "reviews": [...], "pagination": { "total": 25, "totalPages": 3, "page": 1 } }
+
+// Forma 2 — campos en raíz (fallback)
+{ "reviews": [...], "total": 25, "totalPages": 3, "page": 1 }
+
+// Implementar así:
+val total = response.pagination?.total ?: response.total ?: 0
+val totalPages = response.pagination?.totalPages ?: response.totalPages ?: 1
+```
+
 ---
 
-## 10. Onboarding de artista (wizard de configuración)
+## 11. Onboarding de artista (wizard de configuración)
 
 El onboarding es un wizard de **7 pasos** que se muestra al artista la primera vez que inicia sesión. Equivale al onboarding web en `PIUMS-FRONTEND/apps/web-artist`.
 
@@ -735,7 +972,7 @@ El onboarding es un wizard de **7 pasos** que se muestra al artista la primera v
 
 ---
 
-## 11. Tour interactivo (`TutorialManager`)
+## 12. Tour interactivo (`TutorialManager`)
 
 El tour es una **superposición sobre la app real** — no pantallas separadas. Se activa desde Más → Tutorial.
 
@@ -767,7 +1004,7 @@ El tour es una **superposición sobre la app real** — no pantallas separadas. 
 
 ---
 
-## 12. Bugs conocidos del backend (workarounds activos)
+## 13. Bugs conocidos del backend (workarounds activos)
 
 | # | Endpoint | Problema | Workaround |
 |---|----------|----------|------------|
@@ -783,7 +1020,7 @@ El tour es una **superposición sobre la app real** — no pantallas separadas. 
 
 ---
 
-## 13. Splash Screen
+## 14. Splash Screen
 
 - Fondo: `piumsOrange` (`#FF6B35`)
 - Logo blanco centrado (76 dp)
@@ -793,7 +1030,7 @@ El tour es una **superposición sobre la app real** — no pantallas separadas. 
 
 ---
 
-## 14. Setup del proyecto Android
+## 15. Setup del proyecto Android
 
 ### Identificador de la app
 ```
@@ -894,7 +1131,7 @@ val googleIdToken = credential.idToken
 
 ---
 
-## 15. Navegación
+## 16. Navegación
 
 ### Flujo de navegación
 ```
