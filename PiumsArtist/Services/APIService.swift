@@ -37,6 +37,7 @@ enum APIEndpoint {
     // OAuth
     case googleOAuth
     case facebookOAuth
+    case tiktokOAuth
     
     // Users
     case userProfile
@@ -169,6 +170,8 @@ enum APIEndpoint {
             return "/auth/oauth/google"
         case .facebookOAuth:
             return "/auth/oauth/facebook"
+        case .tiktokOAuth:
+            return "/auth/oauth/tiktok"
             
         // Users
         case .userProfile:

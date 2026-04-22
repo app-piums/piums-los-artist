@@ -8,6 +8,7 @@
 import Foundation
 import Combine
 import SwiftUI
+import AuthenticationServices
 
 @MainActor
 final class AuthService: ObservableObject {
@@ -353,13 +354,97 @@ final class AuthService: ObservableObject {
         return json["id"] as? String
     }
     
+    // MARK: - Social OAuth
+
+    /// Inicia el flujo OAuth del proveedor via ASWebAuthenticationSession.
+    /// El backend debe exponer `/auth/oauth/{provider}/init?callbackScheme=piumsartist`
+    /// y redirigir al callback `piumsartist://auth/callback?token=XXX&refreshToken=YYY`
+    func loginWithSocial(provider: SocialProvider, presentationAnchor: ASPresentationAnchor) async {
+        isLoading = true
+        errorMessage = nil
+
+        let callbackScheme = "piumsartist"
+        let initPath = "\(APIConfig.currentURL)/auth/oauth/\(provider.rawValue)/init?callbackScheme=\(callbackScheme)"
+        guard let authURL = URL(string: initPath) else {
+            errorMessage = "URL de autenticación inválida"
+            isLoading = false
+            return
+        }
+
+        do {
+            let callbackURL = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<URL, Error>) in
+                let session = ASWebAuthenticationSession(url: authURL, callbackURLScheme: callbackScheme) { url, error in
+                    if let error { cont.resume(throwing: error) }
+                    else if let url { cont.resume(returning: url) }
+                    else { cont.resume(throwing: URLError(.badServerResponse)) }
+                }
+                session.presentationContextProvider = OAuthPresentationProvider(anchor: presentationAnchor)
+                session.prefersEphemeralWebBrowserSession = false
+                session.start()
+            }
+
+            guard let components = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false),
+                  let token = components.queryItems?.first(where: { $0.name == "token" })?.value else {
+                errorMessage = "No se recibió token de autenticación"
+                isLoading = false
+                return
+            }
+
+            let refreshToken = components.queryItems?.first(where: { $0.name == "refreshToken" })?.value
+
+            apiService.authToken = token
+            if let rt = refreshToken {
+                UserDefaults.standard.set(rt, forKey: "refresh_token")
+            }
+
+            if let user = decodeJWTUser(token: token) {
+                currentArtist = user
+            }
+
+            let expiresInSeconds = 900 // default 15 min; backend puede enviar expiresIn como query param
+            scheduleTokenRefresh(expiresIn: expiresInSeconds)
+            await checkVerificationStatus()
+
+        } catch ASWebAuthenticationSessionError.canceledLogin {
+            // usuario canceló, no mostrar error
+        } catch {
+            errorMessage = "Error al autenticar con \(provider.displayName): \(error.localizedDescription)"
+        }
+
+        isLoading = false
+    }
+
     // MARK: - Auto-login Support
-    
+
     func attemptAutoLogin() async {
         // Restore session whenever a token exists — rememberMe only controls email pre-fill
         guard apiService.authToken != nil else { return }
         await validateToken()
     }
+}
+
+// MARK: - Social Provider
+
+enum SocialProvider: String {
+    case google = "google"
+    case facebook = "facebook"
+    case tiktok = "tiktok"
+
+    var displayName: String {
+        switch self {
+        case .google: return "Google"
+        case .facebook: return "Facebook"
+        case .tiktok: return "TikTok"
+        }
+    }
+}
+
+// MARK: - OAuth Presentation Provider
+
+final class OAuthPresentationProvider: NSObject, ASWebAuthenticationPresentationContextProviding {
+    private let anchor: ASPresentationAnchor
+    init(anchor: ASPresentationAnchor) { self.anchor = anchor }
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor { anchor }
 }
 
 // MARK: - Authentication View Modifiers
@@ -384,7 +469,7 @@ struct AuthenticatedView<Content: View>: View {
     }
 }
 
-// MARK: - Login View (Artist Design — mismo estilo que app cliente)
+// MARK: - Login View (Artist Design — flujo email-first + social providers)
 
 struct LoginView: View {
     @StateObject private var authService = AuthService.shared
@@ -396,30 +481,28 @@ struct LoginView: View {
     @State private var showForgotPassword = false
     @State private var animateIn = false
     @State private var glowPulse = false
+    @State private var loginStep: LoginStep = .email
 
     enum LoginField { case email, password }
+    enum LoginStep { case email, password, social }
 
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .bottom) {
                 backgroundLayer(geo: geo)
                 loginCard
-                    .frame(height: geo.size.height * 0.68)
-                    .offset(y: animateIn ? 0 : geo.size.height * 0.7)
+                    .frame(height: geo.size.height * 0.72)
+                    .offset(y: animateIn ? 0 : geo.size.height * 0.8)
             }
             .ignoresSafeArea()
         }
         .preferredColorScheme(.dark)
         .onAppear {
             email = authService.artistEmail
-            withAnimation(.spring(response: 0.75, dampingFraction: 0.88).delay(0.05)) {
-                animateIn = true
-            }
-            withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true).delay(0.3)) {
-                glowPulse = true
-            }
+            withAnimation(.spring(response: 0.75, dampingFraction: 0.88).delay(0.05)) { animateIn = true }
+            withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true).delay(0.3)) { glowPulse = true }
         }
-        .alert("Error de Login", isPresented: .constant(authService.errorMessage != nil)) {
+        .alert("Error", isPresented: .constant(authService.errorMessage != nil)) {
             Button("Aceptar") { authService.errorMessage = nil }
         } message: {
             Text(authService.errorMessage ?? "")
@@ -435,7 +518,6 @@ struct LoginView: View {
         ZStack(alignment: .top) {
             Color.piumsBackground.ignoresSafeArea()
 
-            // Glow naranja animado
             Circle()
                 .fill(Color.piumsOrange.opacity(glowPulse ? 0.30 : 0.18))
                 .frame(width: 300, height: 300)
@@ -445,28 +527,24 @@ struct LoginView: View {
             VStack(spacing: 0) {
                 Spacer().frame(height: geo.safeAreaInsets.top + 20)
 
-                // Logo
                 Image("PiumsLogo")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(height: 32)
                     .opacity(animateIn ? 1 : 0)
-                    .animation(.easeOut(duration: 0.4).delay(0.0), value: animateIn)
+                    .animation(.easeOut(duration: 0.4), value: animateIn)
 
                 Spacer().frame(height: 28)
 
-                // Ícono artista
                 ZStack {
                     Circle()
                         .fill(Color.piumsOrange.opacity(0.15))
                         .frame(width: 116, height: 116)
                         .blur(radius: 12)
-
                     Circle()
                         .fill(Color.piumsBackgroundElevated)
                         .frame(width: 92, height: 92)
                         .overlay(Circle().fill(Color.piumsOrange.opacity(0.22)))
-
                     Image(systemName: "music.microphone")
                         .font(.system(size: 36, weight: .regular))
                         .foregroundStyle(Color.piumsOrange)
@@ -503,58 +581,32 @@ struct LoginView: View {
                 .fill(Color.white.opacity(0.18))
                 .frame(width: 36, height: 4)
                 .padding(.top, 14)
-                .padding(.bottom, 28)
+                .padding(.bottom, 24)
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 28) {
-
-                    // Header
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Bienvenido de nuevo")
-                            .font(.system(size: 26, weight: .bold))
-                            .foregroundStyle(Color.piumsLabel)
-                        Text("Accede a tu panel de control.")
-                            .font(.subheadline)
-                            .foregroundStyle(Color.piumsLabelSecondary)
+                VStack(spacing: 0) {
+                    switch loginStep {
+                    case .email:
+                        emailPanel
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .leading).combined(with: .opacity),
+                                removal: .move(edge: .leading).combined(with: .opacity)
+                            ))
+                    case .password:
+                        passwordPanel
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .trailing).combined(with: .opacity),
+                                removal: .move(edge: .trailing).combined(with: .opacity)
+                            ))
+                    case .social:
+                        socialPanel
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .trailing).combined(with: .opacity),
+                                removal: .move(edge: .trailing).combined(with: .opacity)
+                            ))
                     }
-
-                    // Campos
-                    VStack(spacing: 14) {
-                        fieldEmail
-                        fieldPassword
-                    }
-
-                    // Error
-                    if let msg = authService.errorMessage {
-                        HStack(spacing: 8) {
-                            Image(systemName: "exclamationmark.circle.fill")
-                                .foregroundStyle(Color.piumsError)
-                            Text(msg)
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(Color.piumsError)
-                            Spacer()
-                        }
-                        .padding(14)
-                        .background(Color.piumsError.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.piumsError.opacity(0.3), lineWidth: 0.5))
-                    }
-
-                    // Botón login
-                    loginButton
-
-                    // Registro
-                    HStack(spacing: 4) {
-                        Text("¿No tienes cuenta?")
-                            .font(.subheadline)
-                            .foregroundStyle(Color.piumsLabelSecondary)
-                        Button("Regístrate") { showRegister = true }
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Color.piumsOrange)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .center)
-
                 }
+                .animation(.spring(response: 0.45, dampingFraction: 0.85), value: loginStep)
                 .padding(.horizontal, 26)
                 .padding(.bottom, 50)
             }
@@ -567,11 +619,191 @@ struct LoginView: View {
         )
     }
 
+    // MARK: - Email Panel (paso 1)
+
+    private var emailPanel: some View {
+        VStack(alignment: .leading, spacing: 26) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Ingresar o crear cuenta")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(Color.piumsLabel)
+            }
+
+            fieldEmail
+
+            if let msg = authService.errorMessage {
+                errorBanner(msg)
+            }
+
+            // Botón Continuar (va al panel de contraseña)
+            continueButton(
+                title: "Continuar",
+                icon: "arrow.right",
+                enabled: isValidEmail(email)
+            ) {
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                    loginStep = .password
+                    focused = .password
+                }
+            }
+
+            // Separador
+            dividerDot
+
+            // Botón social colapsado
+            socialCollapseButton
+
+            // Registro
+            registerLink
+        }
+    }
+
+    // MARK: - Password Panel (paso 2)
+
+    private var passwordPanel: some View {
+        VStack(alignment: .leading, spacing: 26) {
+            // Encabezado con email y botón atrás
+            HStack(spacing: 12) {
+                Button {
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                        loginStep = .email
+                    }
+                } label: {
+                    Image(systemName: "arrow.left")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.piumsOrange)
+                        .frame(width: 36, height: 36)
+                        .background(Color.piumsBackgroundElevated)
+                        .clipShape(Circle())
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Bienvenido")
+                        .font(.caption)
+                        .foregroundStyle(Color.piumsLabelSecondary)
+                    Text(email)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Color.piumsLabel)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+
+                Spacer()
+            }
+
+            fieldPassword
+
+            if let msg = authService.errorMessage {
+                errorBanner(msg)
+            }
+
+            loginButton
+
+            HStack {
+                Spacer()
+                Button("¿Olvidaste tu contraseña?") { showForgotPassword = true }
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(Color.piumsOrange)
+            }
+
+            registerLink
+        }
+    }
+
+    // MARK: - Social Panel (paso social)
+
+    private var socialPanel: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Ingresar o crear cuenta con:")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(Color.piumsLabel)
+            }
+
+            VStack(spacing: 12) {
+                socialProviderButton(provider: .google)
+                socialProviderButton(provider: .facebook)
+                socialProviderButton(provider: .tiktok)
+            }
+
+            dividerDot
+
+            // Volver a email/contraseña
+            Button {
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                    loginStep = .email
+                }
+            } label: {
+                Text("Continúa con correo y contraseña")
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(Color.piumsLabel.opacity(0.85))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .background(Color.piumsBackgroundElevated)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+                    )
+            }
+
+            registerLink
+
+            Text("Al crear una cuenta en Piums, aceptas los ")
+                .font(.caption)
+                .foregroundStyle(Color.piumsLabelSecondary)
+                + Text("Términos de Servicio")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(Color.piumsOrange)
+                + Text(" y ")
+                    .font(.caption)
+                    .foregroundStyle(Color.piumsLabelSecondary)
+                + Text("Política de Privacidad.")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(Color.piumsOrange)
+        }
+    }
+
+    // MARK: - Social Provider Button
+
+    @ViewBuilder
+    private func socialProviderButton(provider: SocialProvider) -> some View {
+        Button {
+            Task {
+                guard let windowScene = UIApplication.shared.connectedScenes
+                    .compactMap({ $0 as? UIWindowScene }).first,
+                      let window = windowScene.windows.first else { return }
+                await authService.loginWithSocial(provider: provider, presentationAnchor: window)
+            }
+        } label: {
+            HStack(spacing: 14) {
+                SocialProviderIcon(provider: provider)
+                    .frame(width: 26, height: 26)
+
+                Text("Continuar con \(provider.displayName)")
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(Color.piumsLabel)
+
+                Spacer()
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .padding(.horizontal, 16)
+            .background(Color.piumsBackgroundElevated)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+            )
+        }
+        .disabled(authService.isLoading)
+    }
+
     // MARK: - Fields
 
     private var fieldEmail: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("CORREO")
+            Text("CORREO ELECTRÓNICO")
                 .font(.caption.bold())
                 .foregroundStyle(.secondary)
                 .tracking(1.2)
@@ -583,7 +815,13 @@ struct LoginView: View {
                 .textInputAutocapitalization(.never)
                 .focused($focused, equals: .email)
                 .submitLabel(.next)
-                .onSubmit { focused = .password }
+                .onSubmit {
+                    guard isValidEmail(email) else { return }
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                        loginStep = .password
+                        focused = .password
+                    }
+                }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 15)
                 .background(Color.piumsBackgroundElevated)
@@ -638,21 +876,37 @@ struct LoginView: View {
                     )
             )
             .animation(.easeInOut(duration: 0.2), value: focused == .password)
-
-            HStack {
-                Spacer()
-                Button("¿Olvidaste tu contraseña?") { showForgotPassword = true }
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(Color.piumsOrange)
-            }
-            .padding(.top, 2)
         }
     }
 
-    // MARK: - Login Button
+    // MARK: - Reusable Components
+
+    @ViewBuilder
+    private func continueButton(title: String, icon: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Text(title).font(.body.bold())
+                Image(systemName: icon).font(.system(size: 14, weight: .bold))
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 54)
+            .background(
+                LinearGradient(
+                    colors: enabled
+                        ? [Color(red: 0.85, green: 0.38, blue: 0.12), Color(red: 0.72, green: 0.28, blue: 0.07)]
+                        : [Color.piumsOrange.opacity(0.4), Color.piumsOrange.opacity(0.4)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                )
+            )
+            .foregroundStyle(.white)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+        }
+        .disabled(!enabled)
+        .animation(.easeInOut(duration: 0.2), value: enabled)
+    }
 
     private var loginButton: some View {
-        let empty = email.isEmpty || password.isEmpty
+        let empty = password.isEmpty
         return Button {
             Task { await authService.login(email: email, password: password) }
         } label: {
@@ -673,8 +927,7 @@ struct LoginView: View {
                     colors: empty
                         ? [Color.piumsOrange.opacity(0.4), Color.piumsOrange.opacity(0.4)]
                         : [Color(red: 0.85, green: 0.38, blue: 0.12), Color(red: 0.72, green: 0.28, blue: 0.07)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
+                    startPoint: .topLeading, endPoint: .bottomTrailing
                 )
             )
             .foregroundStyle(.white)
@@ -682,6 +935,108 @@ struct LoginView: View {
         }
         .disabled(authService.isLoading || empty)
         .animation(.easeInOut(duration: 0.2), value: empty)
+    }
+
+    private var socialCollapseButton: some View {
+        Button {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                loginStep = .social
+            }
+        } label: {
+            Text("Continúa con Google, Facebook o TikTok")
+                .font(.body.weight(.medium))
+                .foregroundStyle(Color.piumsLabel.opacity(0.85))
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .background(Color.piumsBackgroundElevated)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+                )
+        }
+    }
+
+    private var dividerDot: some View {
+        HStack(spacing: 8) {
+            Rectangle()
+                .fill(Color.white.opacity(0.12))
+                .frame(height: 1)
+            Circle()
+                .fill(Color.white.opacity(0.2))
+                .frame(width: 5, height: 5)
+            Rectangle()
+                .fill(Color.white.opacity(0.12))
+                .frame(height: 1)
+        }
+    }
+
+    private var registerLink: some View {
+        HStack(spacing: 4) {
+            Text("¿No tienes cuenta?")
+                .font(.subheadline)
+                .foregroundStyle(Color.piumsLabelSecondary)
+            Button("Regístrate") { showRegister = true }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.piumsOrange)
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    @ViewBuilder
+    private func errorBanner(_ msg: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .foregroundStyle(Color.piumsError)
+            Text(msg)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(Color.piumsError)
+            Spacer()
+        }
+        .padding(14)
+        .background(Color.piumsError.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.piumsError.opacity(0.3), lineWidth: 0.5))
+    }
+
+    private func isValidEmail(_ email: String) -> Bool {
+        let pattern = #"^[^\s@]+@[^\s@]+\.[^\s@]+$"#
+        return email.range(of: pattern, options: .regularExpression) != nil
+    }
+}
+
+// MARK: - Social Provider Icon
+
+struct SocialProviderIcon: View {
+    let provider: SocialProvider
+
+    var body: some View {
+        ZStack {
+            switch provider {
+            case .google:
+                // G de Google con colores de marca
+                ZStack {
+                    Circle().fill(Color.white).frame(width: 26, height: 26)
+                    Text("G")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Color(red: 0.26, green: 0.52, blue: 0.96))
+                }
+            case .facebook:
+                ZStack {
+                    Circle().fill(Color(red: 0.23, green: 0.35, blue: 0.60)).frame(width: 26, height: 26)
+                    Text("f")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+            case .tiktok:
+                ZStack {
+                    Circle().fill(Color.black).frame(width: 26, height: 26)
+                    Image(systemName: "music.note")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+            }
+        }
     }
 }
 

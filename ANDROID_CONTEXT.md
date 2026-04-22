@@ -305,10 +305,47 @@ Color activo del tab: `piumsOrange` (`#FF6B35`).
 
 ## 5. Autenticación
 
-### Login
+### Login — flujo email-first + social (estilo Platzi)
+
+El login tiene **3 estados** en la misma card:
+
+**Paso 1 — Email** (estado inicial)
+- Campo de correo electrónico
+- Botón "Continuar →" (habilitado solo con email válido → navega a paso 2)
+- Separador con punto central
+- Botón colapsado "Continúa con Google, Facebook o TikTok" (→ abre panel social)
+
+**Paso 2 — Contraseña** (tras ingresar email válido)
+- Cabecera con flecha atrás + email mostrado
+- Campo de contraseña con toggle de visibilidad
+- Botón "Iniciar sesión" (habilitado solo si hay contraseña)
+- Enlace "¿Olvidaste tu contraseña?"
+
+**Panel social** (al tocar el botón colapsado)
+- Encabezado "Ingresar o crear cuenta con:"
+- 3 botones de proveedor: Google, Facebook, TikTok (cada uno con icono + texto)
+- Separador con punto central
+- Botón "Continúa con correo y contraseña" (→ regresa al paso 1)
+- Texto de términos de servicio
+
+#### Login con correo
 - `POST /auth/login` body: `{ email, password }`
 - Response: `{ token, refreshToken, user: { id, email, nombre/name, role } }`
 - Guardar token en `EncryptedSharedPreferences` / `Keystore`
+
+#### Login social (OAuth via browser)
+- Usar `CustomTabsIntent` (Android) / `ASWebAuthenticationSession` (iOS)
+- Flujo: abrir `{baseURL}/auth/oauth/{provider}/init?callbackScheme=piumsartist`
+- El backend redirige al proveedor → callback: `piumsartist://auth/callback?token=XXX&refreshToken=YYY`
+- Extraer `token` y `refreshToken` del callback URL
+- Providers: `google`, `facebook`, `tiktok`
+- Endpoints de callback: `POST /auth/oauth/google`, `/auth/oauth/facebook`, `/auth/oauth/tiktok`
+- Registrar URL scheme `piumsartist` en `AndroidManifest.xml` con `intent-filter` para el callback
+
+#### Iconos de providers (sin SDK externo)
+- Google: letra "G" blanca sobre fondo azul `#4285F4`
+- Facebook: letra "f" blanca sobre fondo azul `#3B5CA0`
+- TikTok: ícono de nota musical blanco sobre fondo negro `#000000`
 
 ### Registro
 - `POST /auth/register` body: `{ email, password, name, nombre: name, role: "ARTIST", phone: null }`

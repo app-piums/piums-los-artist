@@ -51,6 +51,11 @@ struct LoginRequest: Codable {
     let password: String
 }
 
+struct OAuthTokenRequest: Codable {
+    let accessToken: String
+    let provider: String
+}
+
 struct AuthResponse: Codable {
     let success: Bool?
     let token: String
