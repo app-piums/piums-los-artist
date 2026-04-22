@@ -206,6 +206,10 @@
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 798D744E2F8D6F30007CA264 /* Products */;
+			packages = (
+				A1FB3E442F9D7A31008BC275 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				A1FB3E452F9D7A31008BC275 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
