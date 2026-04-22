@@ -567,17 +567,28 @@ Content-Type: application/json
 
 ```kotlin
 // Base URLs
-const val BASE_URL = "https://piums.com/api"
+const val BASE_URL = "https://piums.com/api"          // Producción (gateway Cloudflare)
 const val STAGING_URL = "https://staging.piums.com/api"
-const val LOCAL_URL = "http://10.0.2.2:3000/api"  // Emulador Android → localhost Mac
+const val LOCAL_URL = "http://10.0.2.2:3000/api"      // Emulador Android → localhost Mac
 
 // Selección por entorno (equivalente al #if DEBUG / targetEnvironment de iOS):
-// Emulador DEBUG    → LOCAL_URL
-// Dispositivo físico DEBUG → STAGING_URL   ← CRÍTICO: el dispositivo no puede alcanzar localhost
-// Release           → BASE_URL
+// Emulador DEBUG          → LOCAL_URL
+// Dispositivo físico DEBUG → STAGING_URL  ← CRÍTICO: el dispositivo no puede alcanzar localhost
+// Release                 → BASE_URL
 ```
 
 > **Crítico para dispositivos físicos:** En emulador, `localhost` de la Mac es `10.0.2.2`. En un **dispositivo físico** real, `localhost` no es alcanzable — usar siempre `STAGING_URL` para builds de debug en hardware real.
+
+**Dominios de producción verificados (Cloudflare):**
+| Servicio | URL |
+|---|---|
+| Gateway / API | `https://piums.com/api` |
+| Web cliente | `https://client.piums.io` |
+| Web artista | `https://artist.piums.io` |
+| Web admin | `https://admin.piums.io` |
+| Backend directo | `https://backend.piums.io/api` |
+
+> El app móvil **siempre** usa el gateway (`piums.com/api`), nunca `backend.piums.io` directamente. El gateway maneja CORS permitiendo requests sin header `Origin` — las peticiones de `URLSession` (iOS) y `OkHttp` (Android) funcionan sin configuración adicional de CORS.
 
 ### URLSession / OkHttp recomendado
 - Timeout de request: **30 segundos**
