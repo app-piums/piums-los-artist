@@ -313,7 +313,7 @@ El login tiene **3 estados** en la misma card:
 - Campo de correo electrónico
 - Botón "Continuar →" (habilitado solo con email válido → navega a paso 2)
 - Separador con punto central
-- Botón colapsado "Continúa con Google, Facebook o TikTok" (→ abre panel social)
+- Botón colapsado "Continúa con Google" (→ abre panel social)
 
 **Paso 2 — Contraseña** (tras ingresar email válido)
 - Cabecera con flecha atrás + email mostrado
@@ -323,7 +323,7 @@ El login tiene **3 estados** en la misma card:
 
 **Panel social** (al tocar el botón colapsado)
 - Encabezado "Ingresar o crear cuenta con:"
-- 3 botones de proveedor: Google, Facebook, TikTok (cada uno con icono + texto)
+- 1 botón: Google (con ícono "G" + texto "Continuar con Google")
 - Separador con punto central
 - Botón "Continúa con correo y contraseña" (→ regresa al paso 1)
 - Texto de términos de servicio
@@ -445,10 +445,8 @@ Response 200:
 
 ---
 
-#### Iconos de providers (sin SDK externo)
-- Google: letra "G" blanca sobre círculo blanco + texto azul `#4285F4`
-- Facebook: letra "f" blanca sobre círculo azul `#3B5CA0`
-- TikTok: ícono de nota musical blanco sobre círculo negro `#000000`
+#### Ícono de Google (sin SDK externo)
+- Círculo blanco 26dp con letra "G" en azul `#4285F4` (font bold, 15sp)
 
 ---
 
@@ -722,12 +720,13 @@ El onboarding es un wizard de **7 pasos** que se muestra al artista la primera v
 - Se puede omitir — no es obligatorio
 - El equipo seleccionado se envía al backend como `equipment: [String]` al crear el perfil
 
-**APIs que se llaman al completar:**
-1. `POST /catalog/services` — crear perfil de artista con disciplina, equipo, bio, links
-2. `POST /artists/availability` — guardar disponibilidad semanal (solo si hay días activos)
-3. `GET /artists/dashboard/me` — obtener el `artistId` del backend para crear el servicio
-4. `POST /catalog/services` — crear el primer servicio si el artista lo completó
-5. `PATCH /auth/complete-onboarding` — marcar onboarding como completado en el backend
+**APIs que se llaman al completar (en orden):**
+1. `POST /artists/profile` — crear perfil de artista con `{ category, specialties, equipment, bio, instagram, website, hourlyRateMin, hourlyRateMax, currency, requiresDeposit, depositPercentage }`
+2. `POST /artists/availability` — guardar disponibilidad semanal (solo si hay días activos) con `{ availability: [{ dayOfWeek, startTime, endTime }] }`
+3. `GET /artists/dashboard/me` — obtener el `artistId` del backend (necesario para crear el servicio)
+4. `GET /catalog/categories` — obtener categorías disponibles para mapear la disciplina al `categoryId`
+5. `POST /catalog/services` — crear el primer servicio con `{ artistId, name, slug, description, categoryId, pricingType: "FIXED", basePrice (centavos), currency: "USD", durationMin: 60 }` (solo si el artista completó ese paso)
+6. `PATCH /auth/complete-onboarding` — marcar onboarding como completado
 
 **Al completar (o al omitir):**
 - Guardar `hasSeenArtistOnboarding = true` en `SharedPreferences`
@@ -784,10 +783,147 @@ El tour es una **superposición sobre la app real** — no pantallas separadas. 
 
 ---
 
-## 11. Splash Screen
+## 13. Splash Screen
 
 - Fondo: `piumsOrange` (`#FF6B35`)
 - Logo blanco centrado (76 dp)
 - Texto "Panel de Artistas" blanco/75% opacidad
 - ProgressIndicator circular blanco
 - Duración mínima: 1.5 segundos + auto-login en paralelo
+
+---
+
+## 14. Setup del proyecto Android
+
+### Identificador de la app
+```
+applicationId = "io.piums.artist"   // o "PIUMS.PiumsArtist" — confirmar con el equipo
+```
+
+### Firebase — `google-services.json`
+1. Ir a Firebase Console → proyecto `piums-artista` → Configuración del proyecto → Tus apps
+2. Registrar app Android con el `applicationId` correcto
+3. Descargar `google-services.json` y colocarlo en `app/` (mismo nivel que `build.gradle` del módulo)
+4. El `CLIENT_ID` para Google Sign-In está dentro del JSON como `oauth_client.client_id` con `client_type: 3`
+
+### Dependencias principales (`build.gradle :app`)
+```gradle
+// Firebase
+implementation platform('com.google.firebase:firebase-bom:33.x.x')
+implementation 'com.google.firebase:firebase-auth-ktx'
+implementation 'com.google.android.gms:play-services-auth:21.x.x'
+
+// Red
+implementation 'com.squareup.retrofit2:retrofit:2.11.x'
+implementation 'com.squareup.retrofit2:converter-gson:2.11.x'
+implementation 'com.squareup.okhttp3:okhttp:4.12.x'
+implementation 'com.squareup.okhttp3:logging-interceptor:4.12.x'
+
+// Imágenes
+implementation 'io.coil-kt:coil-compose:2.x.x'
+
+// Seguridad
+implementation 'androidx.security:security-crypto:1.1.x'  // EncryptedSharedPreferences
+
+// Inyección de dependencias
+implementation 'com.google.dagger:hilt-android:2.x.x'
+kapt 'com.google.dagger:hilt-android-compiler:2.x.x'
+```
+
+### Arquitectura recomendada
+- **MVVM + Clean Architecture** — igual que la estructura de ViewModels en iOS
+- `ViewModel` por pantalla, `Repository` por dominio (AuthRepository, BookingsRepository, etc.)
+- `Hilt` para inyección de dependencias
+- `StateFlow` / `LiveData` para estado reactivo
+- `Coroutines` para llamadas de red (equivale a `async/await` de Swift)
+
+### OkHttp — Interceptor de autenticación y refresh automático
+```kotlin
+class AuthInterceptor(
+    private val tokenStore: TokenStore,
+    private val authRepository: AuthRepository
+) : Interceptor {
+    override fun intercept(chain: Interceptor.Chain): Response {
+        val request = chain.request().newBuilder()
+            .addHeader("Authorization", "Bearer ${tokenStore.accessToken}")
+            .build()
+
+        val response = chain.proceed(request)
+
+        if (response.code == 401) {
+            synchronized(this) {
+                val newToken = runBlocking { authRepository.refreshToken() }
+                if (newToken != null) {
+                    val retryRequest = chain.request().newBuilder()
+                        .addHeader("Authorization", "Bearer $newToken")
+                        .build()
+                    return chain.proceed(retryRequest)
+                } else {
+                    // refresh falló → logout
+                    tokenStore.clear()
+                }
+            }
+        }
+        return response
+    }
+}
+```
+
+### Google Sign-In — Credential Manager (API moderna, Android 14+)
+```kotlin
+// Alternativa moderna a GoogleSignInClient (deprecated en 2024)
+val credentialManager = CredentialManager.create(context)
+
+val googleIdOption = GetGoogleIdOption.Builder()
+    .setFilterByAuthorizedAccounts(false)
+    .setServerClientId(CLIENT_ID)  // El mismo CLIENT_ID del JSON
+    .build()
+
+val request = GetCredentialRequest.Builder()
+    .addCredentialOption(googleIdOption)
+    .build()
+
+val result = credentialManager.getCredential(context, request)
+val credential = result.credential as GoogleIdTokenCredential
+val googleIdToken = credential.idToken
+
+// Continuar igual: Firebase → Piums token
+```
+
+> Usar `GoogleSignInClient` (legacy) si el minSdk < 28 o se necesita compatibilidad amplia. Usar `CredentialManager` si minSdk ≥ 28 y se quiere la API moderna.
+
+---
+
+## 15. Navegación
+
+### Flujo de navegación
+```
+SplashScreen
+  ├── (sin token / token inválido) → LoginScreen
+  │     ├── RegisterScreen
+  │     └── ForgotPasswordScreen
+  └── (token válido) → MainScreen
+        ├── (isNewUser o !hasSeenOnboarding) → OnboardingScreen → MainScreen
+        └── (needsVerification) → VerificacionScreen (modal sobre MainScreen)
+              └── MainScreen con Bottom Navigation
+                    ├── DashboardScreen
+                    ├── BookingsScreen
+                    ├── CalendarScreen
+                    ├── MessagesScreen
+                    └── MoreMenuScreen
+                          ├── ProfileScreen (sheet)
+                          ├── ServicesScreen (sheet)
+                          ├── ReviewsScreen (sheet)
+                          ├── DisputasScreen (sheet)
+                          ├── SettingsScreen (sheet)
+                          └── TutorialScreen (overlay)
+```
+
+### Lógica de decisión al iniciar
+1. Leer `auth_token` de `EncryptedSharedPreferences`
+2. Si no existe → `LoginScreen`
+3. Si existe → decodificar JWT → si `exp` pasado → intentar refresh
+4. Si refresh ok → `GET /auth/me` → verificar `documentFrontUrl`
+5. Si `hasSeenArtistOnboarding == false` → `OnboardingScreen`
+6. Si `documentFrontUrl == null` → mostrar `VerificacionScreen` como modal dismissible
+7. → `MainScreen` con bottom nav
