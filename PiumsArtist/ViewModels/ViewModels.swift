@@ -385,7 +385,9 @@ final class CalendarViewModel: ObservableObject {
                 responseType: BlockedSlotDTO.self
             )
             await loadBlockedSlots()
-        } catch { }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
         isLoading = false
     }
 
@@ -399,7 +401,9 @@ final class CalendarViewModel: ObservableObject {
                 responseType: EmptyResponseDTO.self
             )
             await loadBlockedSlots()
-        } catch { }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
         isLoading = false
     }
 
@@ -442,7 +446,9 @@ final class CalendarViewModel: ObservableObject {
                     current = cal.date(byAdding: .day, value: 1, to: current) ?? current
                 }
             }
-        } catch { }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     func unblockSelectedDay() async {
@@ -621,7 +627,9 @@ final class MessagesViewModel: ObservableObject {
                 )
                 messages = dtos.map { $0.toDomainModel() }
             }
-        } catch { }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
         // Marcar conversación como leída (igual que hace el cliente)
         try? await apiService.request(
             endpoint: .markConversationRead(conversationId),

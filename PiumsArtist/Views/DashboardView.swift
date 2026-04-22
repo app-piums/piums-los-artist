@@ -523,6 +523,7 @@ private struct NotificationRow: View {
 final class NotificationsViewModel: ObservableObject {
     @Published var notifications: [NotificationItem] = []
     @Published var isLoading = false
+    @Published var errorMessage: String?
 
     struct NotificationItem: Identifiable {
         let id: String
@@ -578,7 +579,9 @@ final class NotificationsViewModel: ObservableObject {
                 return NotificationItem(id: dto.id, title: dto.title, message: dto.message,
                                         isRead: dto.read, type: dto.type, createdAt: date)
             }
-        } catch { }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
         isLoading = false
     }
 
