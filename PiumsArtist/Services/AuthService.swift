@@ -8,7 +8,6 @@
 import Foundation
 import Combine
 import SwiftUI
-import AuthenticationServices
 import FirebaseAuth
 import GoogleSignIn
 
@@ -350,26 +349,16 @@ final class AuthService: ObservableObject {
     
     // MARK: - Social OAuth
 
-    func loginWithSocial(provider: SocialProvider, presentationAnchor: ASPresentationAnchor) async {
+    /// Google Sign-In: GIDSignIn → Firebase credential → Firebase ID token → POST /api/auth/firebase
+    func loginWithGoogle() async {
         isLoading = true
         errorMessage = nil
 
-        switch provider {
-        case .google:
-            await loginWithGoogle()
-        case .facebook, .tiktok:
-            await loginWithWebOAuth(provider: provider, presentationAnchor: presentationAnchor)
-        }
-
-        isLoading = false
-    }
-
-    /// Google: GIDSignIn → Firebase credential → Firebase ID token → POST /api/auth/firebase
-    private func loginWithGoogle() async {
         guard let windowScene = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene }).first,
               let rootViewController = windowScene.windows.first?.rootViewController else {
             errorMessage = "No se pudo obtener la ventana de presentación"
+            isLoading = false
             return
         }
 
@@ -378,6 +367,7 @@ final class AuthService: ObservableObject {
 
             guard let idToken = result.user.idToken?.tokenString else {
                 errorMessage = "No se recibió el token de Google"
+                isLoading = false
                 return
             }
 
@@ -394,73 +384,23 @@ final class AuthService: ObservableObject {
                 responseType: AuthResponse.self
             )
 
-            await handleAuthResponse(response)
+            apiService.authToken = response.token
+            if let rt = response.refreshToken {
+                KeychainStore.save(rt, key: "refresh_token")
+            }
+            if let user = decodeJWTUser(token: response.token) {
+                currentArtist = user
+            }
+            scheduleTokenRefresh(expiresIn: 15 * 60)
+            await checkVerificationStatus()
 
         } catch let error as NSError where error.domain == "com.google.GIDSignIn" && error.code == -5 {
-            // GIDSignInErrorCode.canceled — usuario canceló, sin mensaje de error
+            // usuario canceló — sin mensaje de error
         } catch {
             errorMessage = "Error al autenticar con Google: \(error.localizedDescription)"
         }
-    }
 
-    /// Facebook / TikTok: flujo web via ASWebAuthenticationSession
-    /// Backend: GET /api/auth/{provider} → callback → piumsartist://app/auth/callback?token=XXX
-    private func loginWithWebOAuth(provider: SocialProvider, presentationAnchor: ASPresentationAnchor) async {
-        let callbackScheme = "piumsartist"
-        let initPath = "\(APIConfig.currentURL)/auth/\(provider.rawValue)"
-        guard let authURL = URL(string: initPath) else {
-            errorMessage = "URL de autenticación inválida"
-            return
-        }
-
-        do {
-            let callbackURL = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<URL, Error>) in
-                let session = ASWebAuthenticationSession(url: authURL, callbackURLScheme: callbackScheme) { url, error in
-                    if let error { cont.resume(throwing: error) }
-                    else if let url { cont.resume(returning: url) }
-                    else { cont.resume(throwing: URLError(.badServerResponse)) }
-                }
-                session.presentationContextProvider = OAuthPresentationProvider(anchor: presentationAnchor)
-                session.prefersEphemeralWebBrowserSession = false
-                session.start()
-            }
-
-            guard let components = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false),
-                  let token = components.queryItems?.first(where: { $0.name == "token" })?.value else {
-                errorMessage = "No se recibió token de autenticación"
-                return
-            }
-
-            let refreshToken = components.queryItems?.first(where: { $0.name == "refreshToken" })?.value
-            apiService.authToken = token
-            if let rt = refreshToken {
-                KeychainStore.save(rt, key: "refresh_token")
-            }
-            if let user = decodeJWTUser(token: token) {
-                currentArtist = user
-            }
-            let expiresInSeconds = 7 * 24 * 3600
-            scheduleTokenRefresh(expiresIn: expiresInSeconds)
-            await checkVerificationStatus()
-
-        } catch ASWebAuthenticationSessionError.canceledLogin {
-            // usuario canceló
-        } catch {
-            errorMessage = "Error al autenticar con \(provider.displayName): \(error.localizedDescription)"
-        }
-    }
-
-    private func handleAuthResponse(_ response: AuthResponse) async {
-        apiService.authToken = response.token
-        if let rt = response.refreshToken {
-            KeychainStore.save(rt, key: "refresh_token")
-        }
-        if let user = decodeJWTUser(token: response.token) {
-            currentArtist = user
-        }
-        let expiresInSeconds = parseExpiresIn(response.expiresIn ?? "7d")
-        scheduleTokenRefresh(expiresIn: expiresInSeconds)
-        await checkVerificationStatus()
+        isLoading = false
     }
 
     // MARK: - Auto-login Support
@@ -470,30 +410,6 @@ final class AuthService: ObservableObject {
         guard apiService.authToken != nil else { return }
         await validateToken()
     }
-}
-
-// MARK: - Social Provider
-
-enum SocialProvider: String {
-    case google = "google"
-    case facebook = "facebook"
-    case tiktok = "tiktok"
-
-    var displayName: String {
-        switch self {
-        case .google: return "Google"
-        case .facebook: return "Facebook"
-        case .tiktok: return "TikTok"
-        }
-    }
-}
-
-// MARK: - OAuth Presentation Provider
-
-final class OAuthPresentationProvider: NSObject, ASWebAuthenticationPresentationContextProviding {
-    private let anchor: ASPresentationAnchor
-    init(anchor: ASPresentationAnchor) { self.anchor = anchor }
-    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor { anchor }
 }
 
 // MARK: - Authentication View Modifiers
@@ -772,9 +688,7 @@ struct LoginView: View {
             }
 
             VStack(spacing: 12) {
-                socialProviderButton(provider: .google)
-                socialProviderButton(provider: .facebook)
-                socialProviderButton(provider: .tiktok)
+                googleButton
             }
 
             dividerDot
@@ -815,23 +729,22 @@ struct LoginView: View {
         }
     }
 
-    // MARK: - Social Provider Button
+    // MARK: - Google Button
 
-    @ViewBuilder
-    private func socialProviderButton(provider: SocialProvider) -> some View {
+    private var googleButton: some View {
         Button {
-            Task {
-                guard let windowScene = UIApplication.shared.connectedScenes
-                    .compactMap({ $0 as? UIWindowScene }).first,
-                      let window = windowScene.windows.first else { return }
-                await authService.loginWithSocial(provider: provider, presentationAnchor: window)
-            }
+            Task { await authService.loginWithGoogle() }
         } label: {
             HStack(spacing: 14) {
-                SocialProviderIcon(provider: provider)
-                    .frame(width: 26, height: 26)
+                ZStack {
+                    Circle().fill(Color.white).frame(width: 26, height: 26)
+                    Text("G")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Color(red: 0.26, green: 0.52, blue: 0.96))
+                }
+                .frame(width: 26, height: 26)
 
-                Text("Continuar con \(provider.displayName)")
+                Text("Continuar con Google")
                     .font(.body.weight(.medium))
                     .foregroundStyle(Color.piumsLabel)
 
@@ -994,7 +907,7 @@ struct LoginView: View {
                 loginStep = .social
             }
         } label: {
-            Text("Continúa con Google, Facebook o TikTok")
+            Text("Continúa con Google")
                 .font(.body.weight(.medium))
                 .foregroundStyle(Color.piumsLabel.opacity(0.85))
                 .frame(maxWidth: .infinity)
@@ -1053,41 +966,6 @@ struct LoginView: View {
     private func isValidEmail(_ email: String) -> Bool {
         let pattern = #"^[^\s@]+@[^\s@]+\.[^\s@]+$"#
         return email.range(of: pattern, options: .regularExpression) != nil
-    }
-}
-
-// MARK: - Social Provider Icon
-
-struct SocialProviderIcon: View {
-    let provider: SocialProvider
-
-    var body: some View {
-        ZStack {
-            switch provider {
-            case .google:
-                // G de Google con colores de marca
-                ZStack {
-                    Circle().fill(Color.white).frame(width: 26, height: 26)
-                    Text("G")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(Color(red: 0.26, green: 0.52, blue: 0.96))
-                }
-            case .facebook:
-                ZStack {
-                    Circle().fill(Color(red: 0.23, green: 0.35, blue: 0.60)).frame(width: 26, height: 26)
-                    Text("f")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(.white)
-                }
-            case .tiktok:
-                ZStack {
-                    Circle().fill(Color.black).frame(width: 26, height: 26)
-                    Image(systemName: "music.note")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(.white)
-                }
-            }
-        }
     }
 }
 

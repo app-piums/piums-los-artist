@@ -403,35 +403,9 @@ FirebaseApp.initializeApp(this)
 
 ---
 
-#### Login social — Facebook y TikTok (flujo web via Custom Tabs)
+#### Facebook y TikTok
 
-Para Facebook y TikTok, usar `CustomTabsIntent` con callback URL scheme:
-
-```kotlin
-// 1. Abrir browser con la URL del backend
-val authUrl = Uri.parse("$baseUrl/auth/${provider}")  // /auth/facebook o /auth/tiktok
-val customTabsIntent = CustomTabsIntent.Builder().build()
-customTabsIntent.launchUrl(context, authUrl)
-
-// 2. Capturar callback en AndroidManifest.xml
-// El backend redirige a: piumsartist://app/auth/callback?token=XXX&refreshToken=YYY
-// ARTIST_APP_URL debe ser "piumsartist://app" en el servidor de producción
-
-// 3. En el Activity/Fragment que maneja el deep link
-val uri = intent.data
-val token = uri.getQueryParameter("token")
-val refreshToken = uri.getQueryParameter("refreshToken")
-```
-
-**`AndroidManifest.xml` — registrar el scheme:**
-```xml
-<intent-filter>
-    <action android:name="android.intent.action.VIEW" />
-    <category android:name="android.intent.category.DEFAULT" />
-    <category android:name="android.intent.category.BROWSABLE" />
-    <data android:scheme="piumsartist" android:host="app" android:pathPrefix="/auth/callback" />
-</intent-filter>
-```
+**No implementados.** El backend no tiene habilitados estos proveedores para la app de artista. No agregar estos botones en la UI.
 
 ---
 
