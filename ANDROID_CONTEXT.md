@@ -101,7 +101,7 @@ Color activo del tab: `piumsOrange` (`#FF6B35`).
 **Booking Card:**
 - Ícono de estado (rounded square con color)
 - Nombre del servicio + código de reserva (monospace)
-- Precio en naranja (formato `Q 0.00`)
+- Precio en naranja (formato `$ 0.00` — moneda USD)
 - Badge de estado + hora + duración en fila
 - Fondo: `surfaceContainer` (`#2C2C2E` dark)
 
@@ -328,24 +328,155 @@ El login tiene **3 estados** en la misma card:
 - Botón "Continúa con correo y contraseña" (→ regresa al paso 1)
 - Texto de términos de servicio
 
-#### Login con correo
-- `POST /auth/login` body: `{ email, password }`
-- Response: `{ token, refreshToken, user: { id, email, nombre/name, role } }`
-- Guardar token en `EncryptedSharedPreferences` / `Keystore`
+---
 
-#### Login social (OAuth via browser)
-- Usar `CustomTabsIntent` (Android) / `ASWebAuthenticationSession` (iOS)
-- Flujo: abrir `{baseURL}/auth/oauth/{provider}/init?callbackScheme=piumsartist`
-- El backend redirige al proveedor → callback: `piumsartist://auth/callback?token=XXX&refreshToken=YYY`
-- Extraer `token` y `refreshToken` del callback URL
-- Providers: `google`, `facebook`, `tiktok`
-- Endpoints de callback: `POST /auth/oauth/google`, `/auth/oauth/facebook`, `/auth/oauth/tiktok`
-- Registrar URL scheme `piumsartist` en `AndroidManifest.xml` con `intent-filter` para el callback
+#### Login con correo
+
+```
+POST /auth/login
+Body: { email, password }
+Response: { token, refreshToken, user: { id, email, nombre, role }, redirectUrl }
+```
+
+- `redirectUrl` es para web — ignorarlo en el app móvil
+- El response **NO incluye `expiresIn`** — el access token dura 15 minutos por defecto; decodificar el campo `exp` del JWT para saber cuándo vence
+- Guardar `token` y `refreshToken` en `EncryptedSharedPreferences`
+
+---
+
+#### Login con Google — flujo nativo Firebase (recomendado)
+
+**No usar web OAuth para Google.** Usar el SDK nativo de Firebase + Google Sign-In para obtener un ID token y canjearlo por el JWT de Piums.
+
+**Dependencias Android (build.gradle):**
+```gradle
+implementation 'com.google.firebase:firebase-auth-ktx'
+implementation 'com.google.android.gms:play-services-auth:21.x.x'
+```
+
+**Flujo completo:**
+
+```kotlin
+// 1. Configurar Google Sign-In
+val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+    .requestIdToken("967320828042-up3edqurf8ug00rq5eketosnr4a3u9k0.apps.googleusercontent.com")
+    .requestEmail()
+    .build()
+val googleSignInClient = GoogleSignIn.getClient(context, gso)
+
+// 2. Lanzar intent de Google
+val signInIntent = googleSignInClient.signInIntent
+startActivityForResult(signInIntent, RC_SIGN_IN)
+
+// 3. En onActivityResult — obtener Google credential
+val task = GoogleSignIn.getSignedInAccountFromIntent(data)
+val account = task.getResult(ApiException::class.java)
+val googleIdToken = account.idToken!!
+
+// 4. Autenticar con Firebase
+val firebaseCredential = GoogleAuthProvider.getCredential(googleIdToken, null)
+FirebaseAuth.getInstance().signInWithCredential(firebaseCredential).await()
+
+// 5. Obtener Firebase ID token
+val firebaseIdToken = FirebaseAuth.getInstance().currentUser!!.getIdToken(false).await().token!!
+
+// 6. Canjear por JWT de Piums
+POST /auth/firebase
+Body: { "idToken": firebaseIdToken, "role": "artista" }
+
+// 7. Guardar tokens de Piums
+// Response: { token, refreshToken, user, isNewUser }
+```
+
+**Notas críticas:**
+- El `CLIENT_ID` para `requestIdToken` es `967320828042-up3edqurf8ug00rq5eketosnr4a3u9k0.apps.googleusercontent.com` (del `GoogleService-Info.plist` / `google-services.json`)
+- El archivo `google-services.json` va en `app/` del módulo Android — equivalente al `GoogleService-Info.plist` de iOS
+- `role` es **case-sensitive**: enviar siempre `"artista"` en minúsculas — `"ARTISTA"` devuelve error 400
+- Si `isNewUser: true`, el backend ya crea el perfil de artista automáticamente (bootstrap interno) — no es necesario llamar ningún endpoint adicional
+- El access token resultante dura **15 minutos**; el refresh token dura **7 días**
+- El response **NO incluye `expiresIn`** — programar el refresh a los 14 minutos o decodificar `exp` del JWT
+
+**Inicialización de Firebase en Android (`Application.onCreate`):**
+```kotlin
+FirebaseApp.initializeApp(this)
+```
+
+---
+
+#### Login social — Facebook y TikTok (flujo web via Custom Tabs)
+
+Para Facebook y TikTok, usar `CustomTabsIntent` con callback URL scheme:
+
+```kotlin
+// 1. Abrir browser con la URL del backend
+val authUrl = Uri.parse("$baseUrl/auth/${provider}")  // /auth/facebook o /auth/tiktok
+val customTabsIntent = CustomTabsIntent.Builder().build()
+customTabsIntent.launchUrl(context, authUrl)
+
+// 2. Capturar callback en AndroidManifest.xml
+// El backend redirige a: piumsartist://app/auth/callback?token=XXX&refreshToken=YYY
+// ARTIST_APP_URL debe ser "piumsartist://app" en el servidor de producción
+
+// 3. En el Activity/Fragment que maneja el deep link
+val uri = intent.data
+val token = uri.getQueryParameter("token")
+val refreshToken = uri.getQueryParameter("refreshToken")
+```
+
+**`AndroidManifest.xml` — registrar el scheme:**
+```xml
+<intent-filter>
+    <action android:name="android.intent.action.VIEW" />
+    <category android:name="android.intent.category.DEFAULT" />
+    <category android:name="android.intent.category.BROWSABLE" />
+    <data android:scheme="piumsartist" android:host="app" android:pathPrefix="/auth/callback" />
+</intent-filter>
+```
+
+---
+
+#### Endpoint `POST /auth/firebase` — detalles verificados en código
+
+```
+POST /auth/firebase
+Body: { "idToken": string, "role": "artista" }
+
+Response 200:
+{
+  "token": "eyJhbGc...",           // Access token Piums (15 min)
+  "refreshToken": "eyJhbGc...",    // Refresh token Piums (7 días)
+  "user": {
+    "id": "uuid",
+    "_id": "uuid",                 // Alias para mobile
+    "email": "string",
+    "nombre": "string",
+    "role": "artista",
+    "googleId": "string",
+    "avatar": "url | null",
+    "emailVerified": true,
+    "status": "ACTIVE",
+    "documentFrontUrl": "url | null",
+    "documentBackUrl": "url | null",
+    "documentSelfieUrl": "url | null"
+  },
+  "isNewUser": true | false
+}
+```
+
+**Comportamiento interno verificado:**
+- El backend valida el token con Identity Toolkit REST API (`identitytoolkit.googleapis.com`) usando `FIREBASE_API_KEY`
+- Si `isNewUser: true` y `role: "artista"`, llama internamente a `POST /artists/internal/bootstrap` — el perfil se crea automáticamente
+- Si el bootstrap falla, el login igual devuelve token (fire-and-forget) — el perfil puede no existir; monitorear logs del servidor
+- `emailVerified` siempre se marca como `true` para logins de Google, independientemente del valor de Google
+
+---
 
 #### Iconos de providers (sin SDK externo)
-- Google: letra "G" blanca sobre fondo azul `#4285F4`
-- Facebook: letra "f" blanca sobre fondo azul `#3B5CA0`
-- TikTok: ícono de nota musical blanco sobre fondo negro `#000000`
+- Google: letra "G" blanca sobre círculo blanco + texto azul `#4285F4`
+- Facebook: letra "f" blanca sobre círculo azul `#3B5CA0`
+- TikTok: ícono de nota musical blanco sobre círculo negro `#000000`
+
+---
 
 ### Registro
 - `POST /auth/register` body: `{ email, password, name, nombre: name, role: "ARTIST", phone: null }`
@@ -353,10 +484,12 @@ El login tiene **3 estados** en la misma card:
 - Usar siempre `role: "ARTIST"` — campo obligatorio, no debe omitirse.
 - ⚠️ El backend puede ignorar el `role` enviado y asignar `"cliente"` por defecto. **Validar el rol del JWT recibido** tras el registro: si no es `artist/artista`, mostrar mensaje de error claro ("Esta cuenta no tiene permisos de artista. Contacta a soporte@piums.io") y no navegar al panel.
 
+---
+
 ### Olvidé mi contraseña (flujo 2 pasos)
+
 **Paso 1 — Solicitar código:**
 - `POST /auth/forgot-password` body: `{ email }`
-- Muestra campo email con validación básica (contiene "@" y ".")
 
 **Paso 2 — Restablecer contraseña:**
 - `POST /auth/reset-password` body: `{ token, newPassword }`
@@ -364,23 +497,95 @@ El login tiene **3 estados** en la misma card:
 - Botón "Ya tengo un código →" permite saltar directamente al paso 2
 - Auto-dismiss / navegación automática tras 1.8s en éxito
 
-**UI:** Usar un flujo de 2 steps en la misma pantalla (no dos pantallas separadas). Feedback de error en rojo, éxito en verde.
+**UI:** Flujo de 2 steps en la misma pantalla. Feedback de error en rojo, éxito en verde.
+
+---
+
+### Refresh de token
+
+```
+POST /auth/refresh
+Body: { "refreshToken": string }
+
+Response: { "token": string, "refreshToken": string }
+```
+
+- El response **NO incluye `user`** — no actualizar datos del usuario aquí
+- Ambos tokens se renuevan (token rotation activo)
+- Guardar el nuevo `refreshToken` en `EncryptedSharedPreferences` — el anterior queda invalidado
+- Programar el refresh 1 minuto antes de que expire el access token (o al recibir 401)
+
+---
 
 ### Auto-login
-- Al iniciar app, leer token guardado
-- Llamar `GET /auth/profile` para validar sesión activa
-- Si 401: borrar token y mostrar Login
+
+1. Al iniciar app, leer token guardado de `EncryptedSharedPreferences`
+2. Decodificar el JWT localmente para verificar `exp` — si ya expiró, intentar refresh
+3. Si el refresh falla, borrar tokens y mostrar Login
+4. Llamar `GET /auth/me` para confirmar sesión activa y obtener estado de verificación
+
+---
+
+### Endpoint `GET /auth/me` — estructura verificada
+
+```
+GET /auth/me
+Headers: Authorization: Bearer {token}
+
+Response: {
+  "user": {                          // ⚠️ SIEMPRE envuelto en "user", NO plano
+    "id": "uuid",
+    "email": "string",
+    "nombre": "string",
+    "role": "artista",
+    "avatar": "url | null",
+    "documentFrontUrl": "url | null",  // null si no ha subido documentos
+    "documentBackUrl": "url | null",
+    "documentSelfieUrl": "url | null"
+  }
+}
+```
+
+⚠️ Si al deserializar este response se trata como objeto plano (sin el wrapper `user`), `documentFrontUrl` siempre será `null` y la verificación nunca se activará. Usar siempre un DTO con `data class AuthMeResponse(val user: AuthMeUser)`.
+
+---
+
+### Logout
+
+```
+POST /auth/logout
+Headers: Authorization: Bearer {token}
+Body: { "refreshToken": string }   // Opcional pero recomendado — revoca el refresh token
+
+Response: { "message": "Logout exitoso" }
+```
+
+- Borrar **todos** los datos locales: `auth_token`, `refresh_token`, `artist_backend_id`, caché de perfil
+- Tokens en Android en `EncryptedSharedPreferences` (nunca en SharedPreferences planas)
+
+---
+
+### Onboarding completado
+
+Llamar este endpoint al terminar el onboarding de artista (tanto si completa todos los pasos como si omite):
+
+```
+PATCH /auth/complete-onboarding
+Headers: Authorization: Bearer {token}
+Body: vacío
+
+Response: { "user": { "id": "...", "onboardingCompletedAt": "..." } }
+```
+
+Guardar también `hasSeenArtistOnboarding = true` en `SharedPreferences` para no mostrar el onboarding al reiniciar la app.
+
+---
 
 ### Headers requeridos
 ```
 Authorization: Bearer {token}
 Content-Type: application/json
 ```
-
-### Logout
-- `POST /auth/logout`
-- Borrar **todos** los datos locales: `auth_token`, `refresh_token`, `artist_backend_id`, cualquier dato de perfil en caché.
-- Tokens en iOS se almacenan en **Keychain** (`kSecClassGenericPassword`), NO en SharedPreferences/UserDefaults.
 
 ---
 
@@ -512,14 +717,37 @@ Fondo: `surfaceVariant` (`#1C1C1E` dark). Sin elevation/shadow visible.
 
 ---
 
-## 10. Onboarding (primera vez)
+## 10. Onboarding de artista (wizard de configuración)
 
-3 pantallas con logo, ilustración y descripción:
-1. "Gestiona tus reservas" 
-2. "Conecta con tus clientes"
-3. "Controla tus ingresos"
+El onboarding es un wizard de **7 pasos** que se muestra al artista la primera vez que inicia sesión. Equivale al onboarding web en `PIUMS-FRONTEND/apps/web-artist`.
 
-Guardar `hasSeenArtistOnboarding = true` en SharedPreferences al completar.
+| Paso | Nombre | Descripción |
+|---|---|---|
+| 1 | **Bienvenida** | Pantalla de entrada con call-to-action |
+| 2 | **Disciplina creativa** | Selección de categoría (Músico, DJ, Fotógrafo, etc.) |
+| 3 | **Equipo** | Selección multi-opción del equipo por disciplina (NUEVO - igual que web) |
+| 4 | **Portfolio y perfil** | Foto de perfil, bio, Instagram, link de portfolio |
+| 5 | **Primer servicio** | Nombre, descripción, precio del servicio |
+| 6 | **Tarifa base** | Rango de precio por hora (mín/máx), moneda USD, depósito |
+| 7 | **Disponibilidad semanal** | Días y horarios activos por día |
+
+**Paso 3 — Equipo (detalle):**
+- Las opciones de equipo cambian según la disciplina elegida en el paso 2
+- Multi-select con chips/tags agrupados por sección (ej: "Audio", "Instrumentos", "Iluminación" para músico)
+- Se puede omitir — no es obligatorio
+- El equipo seleccionado se envía al backend como `equipment: [String]` al crear el perfil
+
+**APIs que se llaman al completar:**
+1. `POST /catalog/services` — crear perfil de artista con disciplina, equipo, bio, links
+2. `POST /artists/availability` — guardar disponibilidad semanal (solo si hay días activos)
+3. `GET /artists/dashboard/me` — obtener el `artistId` del backend para crear el servicio
+4. `POST /catalog/services` — crear el primer servicio si el artista lo completó
+5. `PATCH /auth/complete-onboarding` — marcar onboarding como completado en el backend
+
+**Al completar (o al omitir):**
+- Guardar `hasSeenArtistOnboarding = true` en `SharedPreferences`
+- Llamar `PATCH /auth/complete-onboarding`
+- Navegar al dashboard principal
 
 ---
 
@@ -564,6 +792,10 @@ El tour es una **superposición sobre la app real** — no pantallas separadas. 
 | 3 | `PATCH /catalog/services/{id}/toggle-status` | Requiere `artistId` en body para autorización | Incluir siempre `{ artistId }` en el body |
 | 4 | `GET /reviews` | Paginación anidada en `pagination{}`, no en campos raíz | Leer `response.pagination.total` y `response.pagination.totalPages` |
 | 5 | `POST /disputes` | `bookingId` requerido aunque la UI lo trate como opcional | Hacer el campo obligatorio en el formulario |
+| 6 | `GET /auth/me` | Response envuelto en `{ user: {...} }` — no es objeto plano | Deserializar con wrapper: `data class AuthMeResponse(val user: AuthMeUser)` |
+| 7 | `POST /auth/refresh` | Response solo devuelve `{ token, refreshToken }` — sin `user` ni `expiresIn` | No actualizar datos del usuario al refrescar; usar solo los nuevos tokens |
+| 8 | `POST /auth/firebase` | `role` es case-sensitive — solo `"artista"` y `"cliente"` en minúsculas | Enviar siempre en minúsculas; `"ARTISTA"` devuelve error 400 |
+| 9 | `POST /auth/firebase` | No devuelve `expiresIn` en el response | El access token dura 15 min por defecto; decodificar `exp` del JWT o asumir 15 min |
 
 ---
 
