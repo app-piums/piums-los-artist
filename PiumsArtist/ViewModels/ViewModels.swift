@@ -199,16 +199,19 @@ final class BookingsViewModel: ObservableObject {
     
     func acceptBooking(_ booking: Booking) {
         guard updatingBookingId == nil else { return }
+        updatingBookingId = booking.id
         Task { await updateBookingStatus(booking, status: "CONFIRMED") }
     }
 
     func rejectBooking(_ booking: Booking) {
         guard updatingBookingId == nil else { return }
+        updatingBookingId = booking.id
         Task { await updateBookingStatus(booking, status: "CANCELLED") }
     }
 
     func completeBooking(_ booking: Booking) {
         guard updatingBookingId == nil else { return }
+        updatingBookingId = booking.id
         Task { await updateBookingStatus(booking, status: "COMPLETED") }
     }
 
@@ -309,6 +312,7 @@ final class CalendarViewModel: ObservableObject {
     @Published var availability: [Date: [TimeSlot]] = [:]
     @Published var blockedSlotIds: [Date: String] = [:]
     @Published var isLoading = false
+    @Published var errorMessage: String?
     
     struct TimeSlot: Identifiable {
         let id = UUID()
@@ -352,7 +356,10 @@ final class CalendarViewModel: ObservableObject {
     
     @MainActor
     func blockTimeSlot(date: Date, reason: String) async {
-        guard let artistId = AuthService.shared.artistBackendId else { return }
+        guard let artistId = AuthService.shared.artistBackendId else {
+            errorMessage = "Perfil de artista no disponible. Reinicia sesión."
+            return
+        }
         isLoading = true
 
         // El backend almacena rangos — bloqueamos el día completo (00:00 → 23:59:59)
@@ -398,7 +405,10 @@ final class CalendarViewModel: ObservableObject {
 
     @MainActor
     private func loadBlockedSlots() async {
-        guard let artistId = AuthService.shared.artistBackendId else { return }
+        guard let artistId = AuthService.shared.artistBackendId else {
+            errorMessage = "Perfil de artista no disponible. Reinicia sesión."
+            return
+        }
 
         let isoFull = ISO8601DateFormatter()
         isoFull.formatOptions = [.withInternetDateTime, .withFractionalSeconds]

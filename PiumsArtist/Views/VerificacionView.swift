@@ -143,6 +143,7 @@ final class VerificacionViewModel: ObservableObject {
         isUploadingBack = true
         backUrl = await uploadImage(imageData: data, folder: "back")
         isUploadingBack = false
+        if backUrl == nil { errorMessage = "Error al subir el reverso. Intenta de nuevo." }
     }
 
     func uploadSelfie(image: UIImage) async {
@@ -177,14 +178,20 @@ final class VerificacionViewModel: ObservableObject {
             let documentSelfieUrl: String
         }
 
+        guard let safeFront = frontUrl, let safeSelfie = selfieUrl else {
+            errorMessage = "Faltan fotos requeridas. Sube el anverso y la selfie."
+            isSaving = false
+            return
+        }
+
         let body = PatchBody(
             ciudad:          ciudad.trimmingCharacters(in: .whitespaces),
             birthDate:       birthStr,
             documentType:    documentType.rawValue,
             documentNumber:  documentNumber.trimmingCharacters(in: .whitespaces),
-            documentFrontUrl:  frontUrl!,
+            documentFrontUrl:  safeFront,
             documentBackUrl:   backUrl,
-            documentSelfieUrl: selfieUrl!
+            documentSelfieUrl: safeSelfie
         )
 
         do {
