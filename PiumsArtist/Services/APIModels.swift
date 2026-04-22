@@ -56,8 +56,13 @@ struct OAuthTokenRequest: Codable {
     let provider: String
 }
 
-struct FirebaseAuthRequest: Codable {
+struct FirebaseAuthRequest: Encodable {
     let idToken: String
+    let role: String
+    init(idToken: String) {
+        self.idToken = idToken
+        self.role = "artista"
+    }
 }
 
 struct AuthResponse: Codable {
