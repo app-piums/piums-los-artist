@@ -356,15 +356,17 @@ final class AuthService: ObservableObject {
     
     // MARK: - Social OAuth
 
-    /// Inicia el flujo OAuth del proveedor via ASWebAuthenticationSession.
-    /// El backend debe exponer `/auth/oauth/{provider}/init?callbackScheme=piumsartist`
-    /// y redirigir al callback `piumsartist://auth/callback?token=XXX&refreshToken=YYY`
+    /// Inicia el flujo OAuth via ASWebAuthenticationSession.
+    /// Backend: GET /api/auth/{provider}  →  Google/passport OAuth
+    /// Callback final: piumsartist://app/auth/callback?token=XXX&provider=google
+    /// Requiere ARTIST_APP_URL=piumsartist://app en el backend.
     func loginWithSocial(provider: SocialProvider, presentationAnchor: ASPresentationAnchor) async {
         isLoading = true
         errorMessage = nil
 
         let callbackScheme = "piumsartist"
-        let initPath = "\(APIConfig.currentURL)/auth/oauth/\(provider.rawValue)/init?callbackScheme=\(callbackScheme)"
+        // El backend expone GET /api/auth/google (Passport.js)
+        let initPath = "\(APIConfig.currentURL)/auth/\(provider.rawValue)"
         guard let authURL = URL(string: initPath) else {
             errorMessage = "URL de autenticación inválida"
             isLoading = false
@@ -390,18 +392,20 @@ final class AuthService: ObservableObject {
                 return
             }
 
+            // El backend Google OAuth devuelve ?token=XXX&provider=google (sin refreshToken en URL)
+            // El token dura 7 días según la implementación del backend
             let refreshToken = components.queryItems?.first(where: { $0.name == "refreshToken" })?.value
 
             apiService.authToken = token
             if let rt = refreshToken {
-                UserDefaults.standard.set(rt, forKey: "refresh_token")
+                KeychainStore.save(rt, key: "refresh_token")
             }
 
             if let user = decodeJWTUser(token: token) {
                 currentArtist = user
             }
 
-            let expiresInSeconds = 900 // default 15 min; backend puede enviar expiresIn como query param
+            let expiresInSeconds = 7 * 24 * 3600 // Google OAuth tokens duran 7 días
             scheduleTokenRefresh(expiresIn: expiresInSeconds)
             await checkVerificationStatus()
 

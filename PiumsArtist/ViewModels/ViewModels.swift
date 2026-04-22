@@ -95,17 +95,18 @@ final class DashboardViewModel: ObservableObject {
     private var currencyFormatter: NumberFormatter {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-        formatter.currencySymbol = "Q"
+        formatter.currencySymbol = "$"
+        formatter.currencyCode = "USD"
         formatter.maximumFractionDigits = 0
         return formatter
     }
 
     var formattedTotalEarnings: String {
-        currencyFormatter.string(from: NSNumber(value: totalEarnings)) ?? "Q\(Int(totalEarnings))"
+        currencyFormatter.string(from: NSNumber(value: totalEarnings)) ?? "$\(Int(totalEarnings))"
     }
 
     var formattedMonthlyEarnings: String {
-        currencyFormatter.string(from: NSNumber(value: monthlyEarnings)) ?? "Q\(Int(monthlyEarnings))"
+        currencyFormatter.string(from: NSNumber(value: monthlyEarnings)) ?? "$\(Int(monthlyEarnings))"
     }
 }
 

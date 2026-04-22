@@ -128,7 +128,7 @@ final class ArtistOnboardingViewModel: ObservableObject {
     // Step 6
     @Published var hourlyRateMin: Double = 0
     @Published var hourlyRateMax: Double = 0
-    @Published var currency = "GTQ"
+    @Published var currency = "USD"
     @Published var requiresDeposit = false
     @Published var depositPercentage: Double = 30
 
@@ -250,7 +250,7 @@ final class ArtistOnboardingViewModel: ObservableObject {
                         categoryId: categoryId,
                         pricingType: "FIXED",
                         basePrice: Int(price * 100),
-                        currency: "GTQ",
+                        currency: "USD",
                         durationMin: 60
                     )
                     let _ = try? await APIService.shared.post(
@@ -812,16 +812,24 @@ private struct OnbRateStep: View {
                             .font(.subheadline).foregroundStyle(.secondary)
                     }
 
-                    // Currency
-                    VStack(alignment:.leading, spacing:6) {
-                        Text("MONEDA").font(.caption.weight(.semibold)).foregroundStyle(.secondary).tracking(0.5)
-                        Picker("Moneda", selection:$vm.currency) {
-                            Text("GTQ — Quetzal").tag("GTQ")
-                            Text("USD — Dólar").tag("USD")
-                            Text("MXN — Peso MX").tag("MXN")
-                        }
-                        .pickerStyle(.segmented)
+                    // Moneda fija USD
+                    HStack(spacing: 8) {
+                        Image(systemName: "dollarsign.circle.fill")
+                            .foregroundStyle(Color.piumsOrange)
+                        Text("USD — Dólar estadounidense")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(Color.piumsLabel)
+                        Spacer()
+                        Text("USD")
+                            .font(.caption.bold())
+                            .padding(.horizontal, 10).padding(.vertical, 4)
+                            .background(Color.piumsOrange.opacity(0.15))
+                            .foregroundStyle(Color.piumsOrange)
+                            .clipShape(Capsule())
                     }
+                    .padding(14)
+                    .background(Color.piumsBackgroundElevated)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
 
                     // Rate range
                     HStack(spacing:16) {

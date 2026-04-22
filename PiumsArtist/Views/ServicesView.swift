@@ -301,9 +301,10 @@ struct ServicesView: View {
     private func formatPrice(_ price: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-        formatter.currencySymbol = "Q"
+        formatter.currencySymbol = "$"
+        formatter.currencyCode = "USD"
         formatter.maximumFractionDigits = price.truncatingRemainder(dividingBy: 1) == 0 ? 0 : 2
-        return formatter.string(from: NSNumber(value: price)) ?? "Q\(Int(price))"
+        return formatter.string(from: NSNumber(value: price)) ?? "$\(Int(price))"
     }
 
     private func pricingLabel(_ service: Service) -> String {
@@ -438,7 +439,7 @@ final class ServicesViewModel: ObservableObject {
             categoryId: categoryId,
             pricingType: pricingType,
             basePrice: Int(priceQuetzales * 100),
-            currency: "GTQ",
+            currency: "USD",
             durationMin: durationMin
         )
         let _ = try await apiService.post(endpoint: .createService, body: body, responseType: ServiceDTO.self)
@@ -459,7 +460,7 @@ final class ServicesViewModel: ObservableObject {
             categoryId: categoryId.isEmpty ? service.categoryId : categoryId,
             pricingType: pricingType,
             basePrice: Int(priceQuetzales * 100),
-            currency: "GTQ",
+            currency: "USD",
             durationMin: durationMin
         )
         let _ = try await apiService.put(
@@ -557,7 +558,7 @@ struct ServiceFormView: View {
                         }
                     }
                     HStack {
-                        Text("Q")
+                        Text("$")
                             .foregroundColor(.secondary)
                         TextField("0.00", text: $priceText)
                             .keyboardType(.decimalPad)
