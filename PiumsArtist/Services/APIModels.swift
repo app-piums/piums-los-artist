@@ -56,6 +56,10 @@ struct OAuthTokenRequest: Codable {
     let provider: String
 }
 
+struct FirebaseAuthRequest: Codable {
+    let idToken: String
+}
+
 struct AuthResponse: Codable {
     let success: Bool?
     let token: String

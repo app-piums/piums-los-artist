@@ -8,6 +8,8 @@
 import SwiftUI
 import SwiftData
 import Combine
+import FirebaseCore
+import GoogleSignIn
 
 // MARK: - ThemeManager
 
@@ -57,6 +59,10 @@ final class ThemeManager: ObservableObject {
 struct PiumsArtistApp: App {
     @StateObject private var themeManager = ThemeManager.shared
 
+    init() {
+        FirebaseApp.configure()
+    }
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([Artist.self, Service.self, Booking.self, Message.self])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
@@ -78,6 +84,9 @@ struct PiumsArtistApp: App {
                 .onAppear { themeManager.applyToWindows() }
                 .onChange(of: themeManager.storedScheme) { _, _ in
                     themeManager.applyToWindows()
+                }
+                .onOpenURL { url in
+                    GIDSignIn.sharedInstance.handle(url)
                 }
         }
         .modelContainer(sharedModelContainer)

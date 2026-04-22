@@ -9,6 +9,8 @@ import Foundation
 import Combine
 import SwiftUI
 import AuthenticationServices
+import FirebaseAuth
+import GoogleSignIn
 
 @MainActor
 final class AuthService: ObservableObject {
@@ -356,20 +358,66 @@ final class AuthService: ObservableObject {
     
     // MARK: - Social OAuth
 
-    /// Inicia el flujo OAuth via ASWebAuthenticationSession.
-    /// Backend: GET /api/auth/{provider}  →  Google/passport OAuth
-    /// Callback final: piumsartist://app/auth/callback?token=XXX&provider=google
-    /// Requiere ARTIST_APP_URL=piumsartist://app en el backend.
     func loginWithSocial(provider: SocialProvider, presentationAnchor: ASPresentationAnchor) async {
         isLoading = true
         errorMessage = nil
 
+        switch provider {
+        case .google:
+            await loginWithGoogle()
+        case .facebook, .tiktok:
+            await loginWithWebOAuth(provider: provider, presentationAnchor: presentationAnchor)
+        }
+
+        isLoading = false
+    }
+
+    /// Google: GIDSignIn → Firebase credential → Firebase ID token → POST /api/auth/firebase
+    private func loginWithGoogle() async {
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene }).first,
+              let rootViewController = windowScene.windows.first?.rootViewController else {
+            errorMessage = "No se pudo obtener la ventana de presentación"
+            return
+        }
+
+        do {
+            let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController)
+
+            guard let idToken = result.user.idToken?.tokenString else {
+                errorMessage = "No se recibió el token de Google"
+                return
+            }
+
+            let accessToken = result.user.accessToken.tokenString
+            let credential = GoogleAuthProvider.credential(withIDToken: idToken, accessToken: accessToken)
+
+            let firebaseResult = try await Auth.auth().signIn(with: credential)
+            let firebaseIdToken = try await firebaseResult.user.getIDToken()
+
+            let request = FirebaseAuthRequest(idToken: firebaseIdToken)
+            let response = try await apiService.post(
+                endpoint: .firebaseAuth,
+                body: request,
+                responseType: AuthResponse.self
+            )
+
+            await handleAuthResponse(response)
+
+        } catch let error as NSError where error.domain == "com.google.GIDSignIn" && error.code == -5 {
+            // GIDSignInErrorCode.canceled — usuario canceló, sin mensaje de error
+        } catch {
+            errorMessage = "Error al autenticar con Google: \(error.localizedDescription)"
+        }
+    }
+
+    /// Facebook / TikTok: flujo web via ASWebAuthenticationSession
+    /// Backend: GET /api/auth/{provider} → callback → piumsartist://app/auth/callback?token=XXX
+    private func loginWithWebOAuth(provider: SocialProvider, presentationAnchor: ASPresentationAnchor) async {
         let callbackScheme = "piumsartist"
-        // El backend expone GET /api/auth/google (Passport.js)
         let initPath = "\(APIConfig.currentURL)/auth/\(provider.rawValue)"
         guard let authURL = URL(string: initPath) else {
             errorMessage = "URL de autenticación inválida"
-            isLoading = false
             return
         }
 
@@ -388,34 +436,39 @@ final class AuthService: ObservableObject {
             guard let components = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false),
                   let token = components.queryItems?.first(where: { $0.name == "token" })?.value else {
                 errorMessage = "No se recibió token de autenticación"
-                isLoading = false
                 return
             }
 
-            // El backend Google OAuth devuelve ?token=XXX&provider=google (sin refreshToken en URL)
-            // El token dura 7 días según la implementación del backend
             let refreshToken = components.queryItems?.first(where: { $0.name == "refreshToken" })?.value
-
             apiService.authToken = token
             if let rt = refreshToken {
                 KeychainStore.save(rt, key: "refresh_token")
             }
-
             if let user = decodeJWTUser(token: token) {
                 currentArtist = user
             }
-
-            let expiresInSeconds = 7 * 24 * 3600 // Google OAuth tokens duran 7 días
+            let expiresInSeconds = 7 * 24 * 3600
             scheduleTokenRefresh(expiresIn: expiresInSeconds)
             await checkVerificationStatus()
 
         } catch ASWebAuthenticationSessionError.canceledLogin {
-            // usuario canceló, no mostrar error
+            // usuario canceló
         } catch {
             errorMessage = "Error al autenticar con \(provider.displayName): \(error.localizedDescription)"
         }
+    }
 
-        isLoading = false
+    private func handleAuthResponse(_ response: AuthResponse) async {
+        apiService.authToken = response.token
+        if let rt = response.refreshToken {
+            KeychainStore.save(rt, key: "refresh_token")
+        }
+        if let user = decodeJWTUser(token: response.token) {
+            currentArtist = user
+        }
+        let expiresInSeconds = parseExpiresIn(response.expiresIn ?? "7d")
+        scheduleTokenRefresh(expiresIn: expiresInSeconds)
+        await checkVerificationStatus()
     }
 
     // MARK: - Auto-login Support
