@@ -577,7 +577,7 @@ struct HealthCheckDTO: Codable {
 
 // MARK: - Auth Me / Verification DTOs
 
-struct AuthMeDTO: Codable {
+struct AuthMeUserDTO: Codable {
     let id: String?
     let nombre: String?
     let email: String?
@@ -592,6 +592,12 @@ struct AuthMeDTO: Codable {
     let documentFrontUrl: String?
     let documentBackUrl: String?
     let documentSelfieUrl: String?
+}
+
+// Backend devuelve { user: { ... } }
+struct AuthMeDTO: Codable {
+    let user: AuthMeUserDTO
+    var documentFrontUrl: String? { user.documentFrontUrl }
 }
 
 struct DocumentUploadResponse: Codable {
