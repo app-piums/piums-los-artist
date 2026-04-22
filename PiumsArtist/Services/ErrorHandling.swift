@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Combine
+import Network
 
 // MARK: - Global Error Handler
 @MainActor
@@ -253,31 +254,35 @@ struct LoadingOverlay: View {
 }
 
 // MARK: - Network Status Monitor
+
 @MainActor
 final class NetworkMonitor: ObservableObject {
     static let shared = NetworkMonitor()
-    
+
     @Published var isConnected = true
     @Published var connectionType: ConnectionType = .wifi
-    
+
     enum ConnectionType {
-        case wifi
-        case cellular
-        case none
+        case wifi, cellular, none
     }
-    
+
+    private let monitor = NWPathMonitor()
+    private let monitorQueue = DispatchQueue(label: "io.piums.network", qos: .utility)
+
     private init() {
-        // In a real implementation, you would use Network framework here
-        // For now, we'll simulate network monitoring
-        startMonitoring()
-    }
-    
-    private func startMonitoring() {
-        // Simulate network monitoring
-        // In production, use NWPathMonitor from Network framework
-        Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { _ in
-            // Check network status here
+        monitor.pathUpdateHandler = { [weak self] path in
+            Task { @MainActor [weak self] in
+                self?.isConnected = path.status == .satisfied
+                if path.usesInterfaceType(.wifi) {
+                    self?.connectionType = .wifi
+                } else if path.usesInterfaceType(.cellular) {
+                    self?.connectionType = .cellular
+                } else {
+                    self?.connectionType = .none
+                }
+            }
         }
+        monitor.start(queue: monitorQueue)
     }
 }
 

@@ -380,6 +380,7 @@ Content-Type: application/json
 ### Logout
 - `POST /auth/logout`
 - Borrar **todos** los datos locales: `auth_token`, `refresh_token`, `artist_backend_id`, cualquier dato de perfil en caché.
+- Tokens en iOS se almacenan en **Keychain** (`kSecClassGenericPassword`), NO en SharedPreferences/UserDefaults.
 
 ---
 
@@ -391,11 +392,32 @@ const val BASE_URL = "https://piums.com/api"
 const val STAGING_URL = "https://staging.piums.com/api"
 const val LOCAL_URL = "http://10.0.2.2:3000/api"  // Emulador Android → localhost Mac
 
-// En desarrollo usar LOCAL_URL o STAGING_URL
-// En release usar BASE_URL
+// Selección por entorno (equivalente al #if DEBUG / targetEnvironment de iOS):
+// Emulador DEBUG    → LOCAL_URL
+// Dispositivo físico DEBUG → STAGING_URL   ← CRÍTICO: el dispositivo no puede alcanzar localhost
+// Release           → BASE_URL
 ```
 
-> **Importante Android:** En emulador, `localhost` de la Mac se accede como `10.0.2.2`. En dispositivo físico, usar la IP local de la Mac (ej. `192.168.1.X`).
+> **Crítico para dispositivos físicos:** En emulador, `localhost` de la Mac es `10.0.2.2`. En un **dispositivo físico** real, `localhost` no es alcanzable — usar siempre `STAGING_URL` para builds de debug en hardware real.
+
+### URLSession / OkHttp recomendado
+- Timeout de request: **30 segundos**
+- Timeout de resource: **5 minutos** (para subida de archivos)
+- `waitsForConnectivity = true` (iOS) / `retryOnConnectionFailure = true` (OkHttp)
+
+### Almacenamiento de tokens (seguridad)
+- `auth_token` y `refresh_token` → **EncryptedSharedPreferences** en Android / **Keychain** en iOS
+- **NO** usar SharedPreferences planas ni UserDefaults — los tokens JWT son credenciales sensibles
+- `artist_backend_id` → SharedPreferences planas es aceptable (no es credencial)
+
+### Query parameters — encoding obligatorio
+- Usar `Uri.Builder` (Android) / `URLComponents` (iOS) para construir URLs con parámetros de búsqueda
+- **Nunca** interpolar strings directamente en la URL (`"q=$query"`) — rompe con espacios y caracteres especiales
+
+### Monitor de conectividad
+- Android: `ConnectivityManager` + `NetworkCallback`
+- iOS: `NWPathMonitor` (framework `Network`)
+- Mostrar banner de "Sin conexión" cuando `isConnected = false`
 
 ---
 

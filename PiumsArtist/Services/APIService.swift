@@ -7,15 +7,60 @@
 
 import Foundation
 import Combine
+import Security
+
+// MARK: - Keychain Helper
+
+enum KeychainStore {
+    static func save(_ value: String, key: String) {
+        let data = Data(value.utf8)
+        let query: [CFString: Any] = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrAccount: key,
+            kSecValueData: data,
+            kSecAttrAccessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        ]
+        SecItemDelete(query as CFDictionary)
+        SecItemAdd(query as CFDictionary, nil)
+    }
+
+    static func load(key: String) -> String? {
+        let query: [CFString: Any] = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrAccount: key,
+            kSecReturnData: true,
+            kSecMatchLimit: kSecMatchLimitOne
+        ]
+        var result: AnyObject?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    static func delete(key: String) {
+        let query: [CFString: Any] = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrAccount: key
+        ]
+        SecItemDelete(query as CFDictionary)
+    }
+}
 
 // MARK: - API Configuration
 struct APIConfig {
     static let baseURL = "https://piums.com/api"
     static let stagingURL = "https://staging.piums.com/api"
     static let localURL = "http://localhost:3000/api"
-    
+
+    // Simulator DEBUG → localhost (servidor del Mac).
+    // Dispositivo físico DEBUG → staging HTTPS (localhost no es alcanzable desde hardware real).
+    // Release → producción.
     #if DEBUG
-    static let currentURL = localURL
+        #if targetEnvironment(simulator)
+        static let currentURL = localURL
+        #else
+        static let currentURL = stagingURL
+        #endif
     #else
     static let currentURL = baseURL
     #endif
@@ -338,23 +383,23 @@ enum APIEndpoint {
         case .markAllNotificationsRead:
             return "/notifications/read-all"
             
-        // Search
+        // Search — URLComponents garantiza percent-encoding de caracteres especiales
         case .searchArtists(let query, let category, let location, let page):
-            var path = "/search/artists"
-            var params: [String] = []
-            if let query = query { params.append("q=\(query)") }
-            if let category = category { params.append("category=\(category)") }
-            if let location = location { params.append("location=\(location)") }
-            if let page = page { params.append("page=\(page)") }
-            if !params.isEmpty { path += "?" + params.joined(separator: "&") }
-            return path
+            var c = URLComponents(); c.path = "/search/artists"
+            var items: [URLQueryItem] = []
+            if let q = query { items.append(URLQueryItem(name: "q", value: q)) }
+            if let cat = category { items.append(URLQueryItem(name: "category", value: cat)) }
+            if let loc = location { items.append(URLQueryItem(name: "location", value: loc)) }
+            if let p = page { items.append(URLQueryItem(name: "page", value: "\(p)")) }
+            if !items.isEmpty { c.queryItems = items }
+            return c.string ?? "/search/artists"
         case .searchServices(let query, let category):
-            var path = "/search/services"
-            var params: [String] = []
-            if let query = query { params.append("q=\(query)") }
-            if let category = category { params.append("category=\(category)") }
-            if !params.isEmpty { path += "?" + params.joined(separator: "&") }
-            return path
+            var c = URLComponents(); c.path = "/search/services"
+            var items: [URLQueryItem] = []
+            if let q = query { items.append(URLQueryItem(name: "q", value: q)) }
+            if let cat = category { items.append(URLQueryItem(name: "category", value: cat)) }
+            if !items.isEmpty { c.queryItems = items }
+            return c.string ?? "/search/services"
             
         // Chat
         case .conversations:
@@ -469,28 +514,31 @@ final class APIService: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     
-    private let session = URLSession.shared
+    private let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 30
+        config.timeoutIntervalForResource = 300
+        config.waitsForConnectivity = true
+        return URLSession(configuration: config)
+    }()
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
     
-    // Authentication token
+    // Authentication token — persisted in Keychain (not UserDefaults)
     @Published var authToken: String? {
         didSet {
             if let token = authToken {
-                UserDefaults.standard.set(token, forKey: "auth_token")
+                KeychainStore.save(token, key: "auth_token")
             } else {
-                UserDefaults.standard.removeObject(forKey: "auth_token")
+                KeychainStore.delete(key: "auth_token")
             }
         }
     }
-    
+
     private init() {
-        // Configure JSON decoder for dates
         decoder.dateDecodingStrategy = .iso8601
         encoder.dateEncodingStrategy = .iso8601
-        
-        // Load saved auth token
-        authToken = UserDefaults.standard.string(forKey: "auth_token")
+        authToken = KeychainStore.load(key: "auth_token")
     }
     
     // MARK: - Generic Request Method

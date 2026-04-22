@@ -62,7 +62,7 @@ final class AuthService: ObservableObject {
             
             // Store refresh token (optional in this backend)
             if let refreshToken = response.refreshToken {
-                UserDefaults.standard.set(refreshToken, forKey: "refresh_token")
+                KeychainStore.save(refreshToken, key: "refresh_token")
             }
             
             // Store user data
@@ -113,7 +113,7 @@ final class AuthService: ObservableObject {
             }
             apiService.authToken = response.token
             if let refreshToken = response.refreshToken {
-                UserDefaults.standard.set(refreshToken, forKey: "refresh_token")
+                KeychainStore.save(refreshToken, key: "refresh_token")
             }
             currentArtist = response.user.toDomainModel()
             let expiresInSeconds = parseExpiresIn(response.expiresIn ?? "15m")
@@ -150,7 +150,7 @@ final class AuthService: ObservableObject {
                 rememberMe = false
                 
                 // Clear all stored session data
-                UserDefaults.standard.removeObject(forKey: "refresh_token")
+                KeychainStore.delete(key: "refresh_token")
                 UserDefaults.standard.removeObject(forKey: "artist_backend_id")
                 
                 // Cancel any scheduled token refresh
@@ -160,7 +160,7 @@ final class AuthService: ObservableObject {
     }
     
     func refreshToken() async {
-        guard let refreshToken = UserDefaults.standard.string(forKey: "refresh_token") else {
+        guard let refreshToken = KeychainStore.load(key: "refresh_token") else {
             await logout()
             return
         }
