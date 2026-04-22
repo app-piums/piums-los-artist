@@ -162,34 +162,26 @@ final class AuthService: ObservableObject {
     }
     
     func refreshToken() async {
-        guard let refreshToken = KeychainStore.load(key: "refresh_token") else {
+        guard let storedRefreshToken = KeychainStore.load(key: "refresh_token") else {
             await logout()
             return
         }
-        
+
         do {
-            let request = RefreshTokenRequest(refreshToken: refreshToken)
+            let request = RefreshTokenRequest(refreshToken: storedRefreshToken)
             let response = try await apiService.post(
                 endpoint: .refreshToken,
                 body: request,
-                responseType: AuthResponse.self
+                responseType: RefreshTokenResponse.self
             )
-            
-            // Update tokens
+
             apiService.authToken = response.token
             if let rt = response.refreshToken {
-                UserDefaults.standard.set(rt, forKey: "refresh_token")
+                KeychainStore.save(rt, key: "refresh_token")
             }
-            
-            // Update user data
-            currentArtist = response.user.toDomainModel()
-            
-            // Schedule next refresh
-            let expiresInSeconds = parseExpiresIn(response.expiresIn ?? "15m")
-            scheduleTokenRefresh(expiresIn: expiresInSeconds)
-            
+            scheduleTokenRefresh(expiresIn: 15 * 60)
+
         } catch {
-            // If refresh fails, logout user
             await logout()
         }
     }

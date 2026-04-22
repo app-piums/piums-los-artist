@@ -262,8 +262,13 @@ final class ArtistOnboardingViewModel: ObservableObject {
             }
 
         }
-        // Mark onboarding done regardless of errors
+        // Mark onboarding done — locally and in backend
         UserDefaults.standard.set(true, forKey: "hasSeenArtistOnboarding")
+        let _ = try? await APIService.shared.request(
+            endpoint: .completeOnboarding,
+            method: .PATCH,
+            responseType: EmptyResponseDTO.self
+        )
         isLoading = false
         onFinished?()
     }

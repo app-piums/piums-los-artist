@@ -185,6 +185,7 @@ enum APIEndpoint {
     case authMe
     case authProfile
     case uploadDocument(folder: String)
+    case completeOnboarding
 
     // Health
     case health
@@ -445,6 +446,8 @@ enum APIEndpoint {
             return "/auth/me"
         case .authProfile:
             return "/auth/profile"
+        case .completeOnboarding:
+            return "/auth/complete-onboarding"
         case .uploadDocument(let folder):
             return "/users/documents/upload?folder=\(folder)"
 

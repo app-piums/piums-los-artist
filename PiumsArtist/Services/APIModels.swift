@@ -74,6 +74,11 @@ struct AuthResponse: Codable {
     let message: String?
 }
 
+struct RefreshTokenResponse: Codable {
+    let token: String
+    let refreshToken: String?
+}
+
 struct RefreshTokenRequest: Codable {
     let refreshToken: String
 }
