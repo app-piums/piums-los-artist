@@ -491,10 +491,12 @@ struct LoginView: View {
             ZStack(alignment: .bottom) {
                 backgroundLayer(geo: geo)
                 loginCard
-                    .frame(height: geo.size.height * 0.72)
+                    // maxHeight (no fijo) → la card se reduce cuando aparece el teclado
+                    .frame(maxHeight: geo.size.height * 0.78)
                     .offset(y: animateIn ? 0 : geo.size.height * 0.8)
             }
-            .ignoresSafeArea()
+            // .container ignora bordes de pantalla pero respeta el teclado
+            .ignoresSafeArea(.container)
         }
         .preferredColorScheme(.dark)
         .onAppear {
@@ -530,23 +532,23 @@ struct LoginView: View {
                 Image("PiumsLogo")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(height: 32)
+                    .frame(height: 52)
                     .opacity(animateIn ? 1 : 0)
                     .animation(.easeOut(duration: 0.4), value: animateIn)
 
-                Spacer().frame(height: 28)
+                Spacer().frame(height: 24)
 
                 ZStack {
                     Circle()
                         .fill(Color.piumsOrange.opacity(0.15))
-                        .frame(width: 116, height: 116)
-                        .blur(radius: 12)
+                        .frame(width: 76, height: 76)
+                        .blur(radius: 10)
                     Circle()
                         .fill(Color.piumsBackgroundElevated)
-                        .frame(width: 92, height: 92)
+                        .frame(width: 62, height: 62)
                         .overlay(Circle().fill(Color.piumsOrange.opacity(0.22)))
                     Image(systemName: "music.microphone")
-                        .font(.system(size: 36, weight: .regular))
+                        .font(.system(size: 24, weight: .regular))
                         .foregroundStyle(Color.piumsOrange)
                 }
                 .scaleEffect(animateIn ? 1 : 0.6)
