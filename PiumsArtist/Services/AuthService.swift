@@ -414,10 +414,11 @@ final class AuthService: ObservableObject {
             if let rt = response.refreshToken {
                 KeychainStore.save(rt, key: "refresh_token")
             }
-            if let user = decodeJWTUser(token: response.token) {
-                currentArtist = user
-            }
-            scheduleTokenRefresh(expiresIn: 15 * 60)
+            currentArtist = response.user.toDomainModel()
+            avatarURL = response.user.avatar
+            let expiresInSeconds = parseExpiresIn(response.expiresIn ?? "15m")
+            scheduleTokenRefresh(expiresIn: expiresInSeconds)
+            await fetchAndSaveArtistBackendId()
             await checkVerificationStatus()
 
         } catch let error as NSError where error.domain == "com.google.GIDSignIn" && error.code == -5 {
