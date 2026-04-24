@@ -425,7 +425,7 @@ final class ServicesViewModel: ObservableObject {
     }
 
     func createService(name: String, description: String, categoryId: String,
-                       pricingType: String, priceQuetzales: Double, durationMin: Int) async throws {
+                       pricingType: String, priceUSD: Double, durationMin: Int) async throws {
         let artistId = cachedArtistId.isEmpty
             ? (AuthService.shared.artistBackendId ?? "") : cachedArtistId
         guard !artistId.isEmpty else {
@@ -441,7 +441,7 @@ final class ServicesViewModel: ObservableObject {
             description: description.count >= 10 ? description : description + String(repeating: ".", count: max(0, 10 - description.count)),
             categoryId: categoryId,
             pricingType: pricingType,
-            basePrice: Int(priceQuetzales * 100),
+            basePrice: Int(priceUSD * 100),
             currency: "USD",
             durationMin: durationMin
         )
@@ -451,7 +451,7 @@ final class ServicesViewModel: ObservableObject {
 
     func updateServiceFields(_ service: Service, name: String, description: String,
                               categoryId: String, pricingType: String,
-                              priceQuetzales: Double, durationMin: Int) async throws {
+                              priceUSD: Double, durationMin: Int) async throws {
         let artistId = cachedArtistId.isEmpty
             ? (AuthService.shared.artistBackendId ?? "") : cachedArtistId
         let slug = service.slug.isEmpty ? makeSlug(from: name) : service.slug
@@ -462,7 +462,7 @@ final class ServicesViewModel: ObservableObject {
             description: description.count >= 10 ? description : description + String(repeating: ".", count: max(0, 10 - description.count)),
             categoryId: categoryId.isEmpty ? service.categoryId : categoryId,
             pricingType: pricingType,
-            basePrice: Int(priceQuetzales * 100),
+            basePrice: Int(priceUSD * 100),
             currency: "USD",
             durationMin: durationMin
         )
@@ -627,13 +627,13 @@ struct ServiceFormView: View {
                 try await vm.updateServiceFields(
                     service, name: name, description: description,
                     categoryId: selectedCategoryId,
-                    pricingType: pricingType, priceQuetzales: price, durationMin: durationMin
+                    pricingType: pricingType, priceUSD: price, durationMin: durationMin
                 )
             } else {
                 try await vm.createService(
                     name: name, description: description,
                     categoryId: selectedCategoryId,
-                    pricingType: pricingType, priceQuetzales: price, durationMin: durationMin
+                    pricingType: pricingType, priceUSD: price, durationMin: durationMin
                 )
             }
             dismiss()

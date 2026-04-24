@@ -410,7 +410,7 @@ struct ArtistBookingRow: View {
     private var formattedPrice: String {
         let q = booking.totalPrice
         if q == 0 { return "" }
-        return String(format: "Q %.0f", q)
+        return String(format: "$%.0f", q)
     }
 
     private var formattedDate: String {
@@ -635,8 +635,8 @@ struct ArtistBookingDetailView: View {
 
     private var formattedPrice: String {
         let q = booking.totalPrice
-        if q == 0 { return "Q 0.00" }
-        return String(format: "Q %.2f", q)
+        if q == 0 { return "$0.00" }
+        return String(format: "$%.2f", q)
     }
 
     private var formattedDateLong: String {

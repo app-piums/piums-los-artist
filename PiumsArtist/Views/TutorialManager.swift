@@ -51,7 +51,7 @@ final class TutorialManager: ObservableObject {
             tab: 4, icon: "bag.fill", color: .piumsAccent,
             title: "Tus Servicios",
             description: "Desde 'Más → Servicios' crea servicios con nombre, precio, duración y categoría. Activa o desactiva sin eliminar.",
-            tip: "Los precios se muestran en Quetzales automáticamente."
+            tip: "Los precios se muestran en dólares (USD) automáticamente."
         ),
         TourStep(
             tab: 4, icon: "airplane.departure", color: .piumsError,

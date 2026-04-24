@@ -113,7 +113,7 @@ final class PiumsArtistTests: XCTestCase {
         let formatter = DateFormatter()
         formatter.dateStyle = .full
         formatter.timeStyle = .none
-        formatter.locale = Locale(identifier: "es_GT")
+        formatter.locale = Locale(identifier: "es_US")
 
         let date = Calendar.current.date(from: DateComponents(year: 2026, month: 4, day: 20))!
         let result = formatter.string(from: date)

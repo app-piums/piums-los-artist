@@ -19,7 +19,7 @@ struct DashboardView: View {
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "EEEE, d 'de' MMMM"
-        f.locale = Locale(identifier: "es_GT")
+        f.locale = Locale(identifier: "es_US")
         return f
     }()
 
@@ -162,7 +162,7 @@ struct DashboardView: View {
                 .foregroundColor(.piumsTextSecondary)
                 .tracking(0.6)
 
-            Text(viewModel.totalEarnings > 0 ? viewModel.formattedTotalEarnings : "Q0")
+            Text(viewModel.totalEarnings > 0 ? viewModel.formattedTotalEarnings : "$0")
                 .font(.system(size: 38, weight: .bold))
                 .foregroundColor(.piumsOrange)
 
