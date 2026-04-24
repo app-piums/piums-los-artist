@@ -210,16 +210,29 @@ Color activo del tab: `piumsOrange` (`#FF6B35`).
 
 **Cambiar foto de perfil:**
 - Botón cámara sobre el avatar → abre el selector de imágenes nativo (MediaPicker / PhotoPicker Android)
-- Comprimir imagen a JPEG 75% antes de enviar
-- `POST /users/avatar/upload` — multipart/form-data, campo `file`
-- Response esperado: `{ url: "https://..." }` — actualizar avatar en UI
+- Redimensionar la imagen a **máximo 800 px** (lado más largo) y comprimir a **JPEG 70%** antes de enviar
+- `POST /users/avatar/upload` — multipart/form-data, campo `avatar` (no `file`)
+- Boundary del multipart: sin guiones adicionales, ej. `piumsboundary{timestamp}` — algunos backends rechazan boundaries con demasiados guiones
+- Timeout del upload: **120 s**
+- **Múltiples formatos de respuesta posibles** — probar en orden:
+  1. `{ url }` / `{ avatar }` / `{ avatarUrl }` / `{ imageUrl }` (nivel raíz)
+  2. `{ user: { avatar } }` o `{ data: { avatar } }` (envoltorio anidado)
+  3. Buscar el primer valor de string que empiece con `http` y contenga `avatar`, `image`, `upload` o `cdn`
+- Después de subir el avatar, llamar también `PUT /artists/profile/me` con `{ avatar: url, imageUrl: url }` para sincronizar el artista-service (que es el que sirve la web)
+- Limpiar caché de imágenes (Coil: `ImageLoader.Builder.memoryCache(null)` o `context.imageLoader.diskCache?.clear()`) para forzar recarga
+- Persistir la URL del avatar en `SharedPreferences` con clave `user_avatar_url` (para restaurarla inmediatamente al abrir la app, antes de cualquier llamada de red)
+- Mostrar `AlertDialog` de error si el upload falla (HTTP ≥ 300 o excepción de red)
 - Mostrar spinner/indicador de carga mientras sube; deshabilitar el botón durante el upload
-- Si la respuesta no contiene `url`, intentar `imageUrl` como fallback
 
 **Sección "Configuración" (menú inferior del perfil):**
 - **Notificaciones** → abre Configuración del sistema (Settings de Android para la app), no un toggle in-app. Usar `Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)` con `EXTRA_APP_PACKAGE`.
 - **Privacidad** → bottom sheet con texto legal de política de privacidad + link a `https://piums.com`
 - **Ayuda / Soporte** → bottom sheet con email de contacto y centro de ayuda
+
+**Editar perfil:**
+- Endpoint: `PUT /artists/profile/me` (no `/users/me`)
+- Body: `{ displayName, nombre, bio, phone }` (todos opcionales, enviar solo los que cambien)
+- Response: `ArtistProfileResponseDTO` — actualizar `AuthRepository.currentArtist` y notificar observers
 
 **API:** `GET /artists/dashboard/me`
 
@@ -422,6 +435,15 @@ data class NotificationsResponse(
 ## 5. Autenticación
 
 ### Login — flujo email-first + social (estilo Platzi)
+
+**Layout visual del login:**
+- Fondo: imagen de fondo oscura con overlay + logo grande centrado arriba
+- Logo `PiumsLogo`: **210 dp** de alto (prominente, sin el ícono de micrófono circular que había antes)
+- Tagline principal: **"Comparte tu talento"** (bold, 26 sp)
+- Tagline secundario: **"Conecta con tu audiencia y\nhaz crecer tu carrera"** (14 sp, 55% opacidad)
+- Card del login: `maxHeight` = **55%** de la pantalla (no altura fija)
+- El scroll dentro de la card hace scroll-to-field automático al enfocar cada campo (usar `ScrollViewReader` / `LazyColumn` + `animateScrollToItem`)
+- `scrollDismissesKeyboard` equivalente: `WindowCompat.setDecorFitsSystemWindows(window, false)` + ajustar padding con `WindowInsetsCompat`
 
 El login tiene **3 estados** en la misma card:
 
@@ -661,7 +683,7 @@ Body: { "refreshToken": string }   // Opcional pero recomendado — revoca el re
 Response: { "message": "Logout exitoso" }
 ```
 
-- Borrar **todos** los datos locales: `auth_token`, `refresh_token`, `artist_backend_id`, caché de perfil
+- Borrar **todos** los datos locales: `auth_token`, `refresh_token`, `artist_backend_id`, `user_avatar_url`, caché de perfil
 - Tokens en Android en `EncryptedSharedPreferences` (nunca en SharedPreferences planas)
 
 ---
@@ -726,6 +748,7 @@ const val LOCAL_URL = "http://10.0.2.2:3000/api"      // Emulador Android → lo
 - `auth_token` y `refresh_token` → **EncryptedSharedPreferences** en Android / **Keychain** en iOS
 - **NO** usar SharedPreferences planas ni UserDefaults — los tokens JWT son credenciales sensibles
 - `artist_backend_id` → SharedPreferences planas es aceptable (no es credencial)
+- `user_avatar_url` → SharedPreferences planas — restaurar inmediatamente al iniciar la app (antes de cualquier llamada de red) para mostrar el avatar sin latencia; borrar al hacer logout
 
 ### Query parameters — encoding obligatorio
 - Usar `Uri.Builder` (Android) / `URLComponents` (iOS) para construir URLs con parámetros de búsqueda
@@ -951,11 +974,33 @@ El onboarding es un wizard de **7 pasos** que se muestra al artista la primera v
 | 6 | **Tarifa base** | Rango de precio por hora (mín/máx), moneda USD, depósito |
 | 7 | **Disponibilidad semanal** | Días y horarios activos por día |
 
+**Paso 2 — Especialidad (sub-paso dentro del mismo paso):**
+- Al seleccionar una disciplina, aparece debajo del grid una sección **"ESPECIALIDAD"** con chips de selección única
+- Chips de especialidad por disciplina (ejemplos):
+  - **Músico:** Cantante/Solista, Guitarrista, Bajista, Baterista, Violinista, Saxofonista, Trompetista, Chelista, Acordeonista, Percusionista, Arpista, Banda Musical, Mariachi, Marimba, Grupo Acústico, Trío/Cuarteto, Rapero/Freestyle, Productor Musical
+  - **DJ / Productor:** DJ Comercial, DJ de Bodas, DJ de Club, Productor de Beat, Productor Musical, Remixer
+  - **Fotógrafo:** Fotografía de Bodas, Eventos, Retrato, Producto, Moda, Documental, Aérea
+  - *(y así para cada disciplina — ver lista completa en `DisciplineOption.all` del código iOS)*
+- Si no hay especialidades predefinidas (ej. "Otro"), o si el usuario no selecciona ninguna → mostrar campo de texto **"ESPECIFICA TU ROL"** (máx 60 caracteres)
+- Si selecciona una especialidad y luego la deselecciona → vuelve a aparecer el campo de texto
+- La especialidad seleccionada (o el rol personalizado) se usa para **auto-rellenar el Paso 5** (servicio):
+  - Nombre del servicio: `"{especialidad} / {sufijo de la disciplina}"` (ej. "Guitarrista / Sesión Musical")
+  - Categoría: mapeada automáticamente desde la disciplina (ej. músico → "Música en vivo")
+  - Descripción: `"Ofrezco mis servicios profesionales como {rol}."` (pre-relleno editable)
+- El auto-relleno del servicio solo ocurre si el campo está vacío al entrar al Paso 5
+
 **Paso 3 — Equipo (detalle):**
 - Las opciones de equipo cambian según la disciplina elegida en el paso 2
 - Multi-select con chips/tags agrupados por sección (ej: "Audio", "Instrumentos", "Iluminación" para músico)
 - Se puede omitir — no es obligatorio
 - El equipo seleccionado se envía al backend como `equipment: [String]` al crear el perfil
+
+**Categorías de servicios actualizadas (Paso 5):**
+```
+"Música en vivo", "DJ para eventos", "Fotografía de eventos", "Fotografía de retrato",
+"Videografía y edición", "Contenido para redes sociales", "Diseño gráfico y branding",
+"Ilustración digital", "Escritura y guiones", "Baile y coreografía", "Animación de eventos", "Otro"
+```
 
 **APIs que se llaman al completar (en orden):**
 1. `POST /artists/profile` — crear perfil de artista con `{ category, specialties, equipment, bio, instagram, website, hourlyRateMin, hourlyRateMax, currency, requiresDeposit, depositPercentage }`
@@ -1022,11 +1067,19 @@ El tour es una **superposición sobre la app real** — no pantallas separadas. 
 
 ## 14. Splash Screen
 
+**Video splash (prioritario):** reproducir `piums_splash.mp4` a pantalla completa (videoGravity = `FIT`, fondo negro) usando **ExoPlayer**. Al terminar la reproducción → continuar al flujo normal. El auto-login se ejecuta en paralelo mientras el video reproduce.
+
+- Velocidad de reproducción: **2×** (`setPlaybackSpeed(2f)`)
+- `setRepeatMode(REPEAT_MODE_OFF)` + listener `onPlaybackStateChanged` para detectar `STATE_ENDED`
+- El video va en `res/raw/piums_splash.mp4` (o cargado desde assets)
+- Fondo de la actividad: negro (`#000000`)
+
+**Fallback** (si el video no está disponible o falla): mostrar pantalla estática durante 1.5 s:
 - Fondo: `piumsOrange` (`#FF6B35`)
 - Logo blanco centrado (76 dp)
-- Texto "Panel de Artistas" blanco/75% opacidad
 - ProgressIndicator circular blanco
-- Duración mínima: 1.5 segundos + auto-login en paralelo
+
+El auto-login se lanza siempre en paralelo al splash (video o estático).
 
 ---
 

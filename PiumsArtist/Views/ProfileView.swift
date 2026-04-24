@@ -7,12 +7,14 @@
 
 import SwiftUI
 import PhotosUI
+import Combine
 
 // MARK: - Profile View
 
 struct ProfileView: View {
     @StateObject private var vm = ProfileViewModel()
     @StateObject private var authService = AuthService.shared
+    @Environment(\.dismiss) private var dismiss
     @State private var showingSettings = false
     @State private var showVerificacion = false
     @State private var showEditProfile = false
@@ -39,11 +41,25 @@ struct ProfileView: View {
             }
             .background(Color(.secondarySystemGroupedBackground).ignoresSafeArea())
             .navigationTitle("Perfil")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Color(.secondarySystemGroupedBackground), for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                            .symbolRenderingMode(.hierarchical)
+                    }
+                }
+            }
             .refreshable { await vm.refreshData() }
-            .sheet(isPresented: $showEditProfile) { EditArtistProfileSheet() }
+            .sheet(isPresented: $showEditProfile, onDismiss: {
+                Task { await vm.refreshData() }
+            }) { EditArtistProfileSheet() }
             .sheet(isPresented: $showPrivacidad) { LegalTextSheet(title: "Política de privacidad", systemImage: "hand.raised") }
             .sheet(isPresented: $showSoporte) { ContactSoporteSheet() }
             .sheet(isPresented: $showingSettings) {
@@ -64,6 +80,11 @@ struct ProfileView: View {
                     PiumsLoadingView("Cargando perfil...")
                 }
             }
+            .alert("Error", isPresented: .constant(vm.errorMessage != nil)) {
+                Button("Aceptar") { vm.errorMessage = nil }
+            } message: {
+                Text(vm.errorMessage ?? "")
+            }
         }
     }
 
@@ -73,10 +94,11 @@ struct ProfileView: View {
         VStack(spacing: 16) {
             PiumsAvatarView(
                 name: artist?.name ?? "A",
-                imageURL: nil,
+                imageURL: vm.avatarURL ?? artist?.avatarURL,
                 size: 90,
                 gradientColors: [.piumsOrange, .piumsAccent]
             )
+            .id(vm.avatarURL ?? artist?.avatarURL ?? "init")
             .overlay(alignment: .bottomTrailing) {
                 Button { showPhotoPicker = true } label: {
                     ZStack {
@@ -294,7 +316,7 @@ struct ProfileView: View {
     private func uploadPhoto(_ item: PhotosPickerItem) async {
         guard let data = try? await item.loadTransferable(type: Data.self),
               let image = UIImage(data: data),
-              let jpeg = image.jpegData(compressionQuality: 0.75) else {
+              let jpeg = resizedJPEG(from: image, maxDimension: 800, quality: 0.7) else {
             photoItem = nil; return
         }
         isUploadingPhoto = true
@@ -303,24 +325,87 @@ struct ProfileView: View {
         guard let url = URL(string: APIConfig.currentURL + APIEndpoint.uploadAvatar.path) else { return }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        request.timeoutInterval = 120
         if let token = APIService.shared.authToken {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
-        let boundary = UUID().uuidString
+        // Boundary simple sin guiones para mayor compatibilidad
+        let boundary = "piumsboundary\(Int(Date().timeIntervalSince1970))"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
         var body = Data()
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"avatar\"; filename=\"avatar.jpg\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
+        let crlf = "\r\n"
+        body.append("--\(boundary)\(crlf)".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"avatar\"; filename=\"avatar.jpg\"\(crlf)".data(using: .utf8)!)
+        body.append("Content-Type: image/jpeg\(crlf)\(crlf)".data(using: .utf8)!)
         body.append(jpeg)
-        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        body.append("\(crlf)--\(boundary)--\(crlf)".data(using: .utf8)!)
         request.httpBody = body
 
-        if let (_, response) = try? await URLSession.shared.data(for: request),
-           let http = response as? HTTPURLResponse, http.statusCode < 300 {
+        do {
+            let (responseData, response) = try await URLSession.shared.data(for: request)
+            let rawResponse = String(data: responseData, encoding: .utf8) ?? "(no decodificable)"
+            print("[AVATAR UPLOAD] status: \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+            print("[AVATAR UPLOAD] body: \(rawResponse)")
+
+            if let http = response as? HTTPURLResponse, http.statusCode >= 300 {
+                let serverMsg = (try? JSONDecoder().decode([String: String].self, from: responseData))?["message"]
+                             ?? (try? JSONDecoder().decode([String: String].self, from: responseData))?["error"]
+                             ?? rawResponse.prefix(300).description
+                vm.errorMessage = "Error \(http.statusCode): \(serverMsg)"
+                return
+            }
+
+            // Extraer la URL del avatar de la respuesta del servidor
+            let newAvatarURL = extractAvatarURL(from: responseData)
+
+            // Limpiar caché de imágenes para forzar recarga
+            URLCache.shared.removeAllCachedResponses()
+
+            if let newURL = newAvatarURL {
+                vm.avatarURL = newURL
+                AuthService.shared.avatarURL = newURL
+                AuthService.shared.currentArtist?.avatarURL = newURL
+
+                // Sincronizar con el artists-service para que la web también vea el cambio
+                let avatarBody = UpdateArtistAvatarRequest(avatar: newURL, imageUrl: newURL)
+                try? await APIService.shared.put(
+                    endpoint: .updateArtistProfile,
+                    body: avatarBody,
+                    responseType: ArtistProfileResponseDTO.self
+                )
+            }
+            // Siempre refrescar para sincronizar el resto del perfil
             await vm.refreshData()
+        } catch {
+            vm.errorMessage = "Error al subir la foto: \(error.localizedDescription)"
         }
+    }
+
+    private func resizedJPEG(from image: UIImage, maxDimension: CGFloat, quality: CGFloat) -> Data? {
+        let size = image.size
+        let ratio = min(maxDimension / size.width, maxDimension / size.height, 1)
+        let newSize = CGSize(width: size.width * ratio, height: size.height * ratio)
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        let resized = renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: newSize)) }
+        return resized.jpegData(compressionQuality: quality)
+    }
+
+    private func extractAvatarURL(from data: Data) -> String? {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        if let resp = try? decoder.decode(AvatarUploadResponseDTO.self, from: data),
+           let url = resp.resolvedURL { return url }
+        if let resp = try? decoder.decode(AvatarUploadUserWrapperDTO.self, from: data),
+           let url = resp.resolvedURL { return url }
+        // Buscar cualquier valor de string que parezca URL de imagen
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            let candidates = json.values.compactMap { $0 as? String }
+            return candidates.first { $0.hasPrefix("http") && (
+                $0.contains("avatar") || $0.contains("image") || $0.contains("upload") || $0.contains("cdn")
+            )}
+        }
+        return nil
     }
 }
 
@@ -389,8 +474,22 @@ private struct EditArtistProfileSheet: View {
     private func save() async {
         isSaving = true; errorMessage = nil
         do {
-            let body = UpdateUserRequest(name: name, phone: phone, bio: bio, location: nil)
-            let _ = try await APIService.shared.put(endpoint: .updateUserProfile, body: body, responseType: UserDTO.self)
+            // Perfil del artista → PUT /artists/dashboard/me
+            let trimmedName = name.trimmingCharacters(in: .whitespaces)
+            let body = UpdateArtistProfileRequest(
+                displayName: trimmedName.isEmpty ? nil : trimmedName,
+                nombre: trimmedName.isEmpty ? nil : trimmedName,
+                bio: bio.isEmpty ? nil : bio,
+                phone: phone.isEmpty ? nil : phone
+            )
+            let _ = try await APIService.shared.put(
+                endpoint: .updateArtistProfile,
+                body: body,
+                responseType: ArtistProfileResponseDTO.self
+            )
+
+            // Actualizar estado local y notificar a todas las vistas
+            AuthService.shared.objectWillChange.send()
             AuthService.shared.currentArtist?.name = name
             AuthService.shared.currentArtist?.phone = phone
             AuthService.shared.currentArtist?.bio = bio

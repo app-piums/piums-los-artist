@@ -56,7 +56,7 @@ struct OAuthTokenRequest: Codable {
     let provider: String
 }
 
-struct FirebaseAuthRequest: Encodable {
+struct FirebaseAuthRequest: Codable {
     let idToken: String
     let role: String
     init(idToken: String) {
@@ -109,6 +109,22 @@ struct UpdateUserRequest: Codable {
     let phone: String?
     let bio: String?
     let location: String?
+}
+
+struct UpdateArtistBioRequest: Codable {
+    let bio: String
+}
+
+struct UpdateArtistProfileRequest: Codable {
+    let displayName: String?
+    let nombre: String?
+    let bio: String?
+    let phone: String?
+}
+
+struct UpdateArtistAvatarRequest: Codable {
+    let avatar: String
+    let imageUrl: String
 }
 
 struct NotificationSettingsDTO: Codable {
@@ -609,6 +625,29 @@ struct DocumentUploadResponse: Codable {
     let url: String
 }
 
+// Backend puede responder con distintas formas al subir el avatar
+struct AvatarUploadResponseDTO: Codable {
+    let url: String?
+    let avatar: String?
+    let avatarUrl: String?
+    let imageUrl: String?
+
+    var resolvedURL: String? { url ?? avatar ?? avatarUrl ?? imageUrl }
+}
+
+// Envoltorio cuando el backend devuelve { user: { avatar: "..." } }
+struct AvatarUploadUserWrapperDTO: Codable {
+    struct Inner: Codable {
+        let avatar: String?
+        let avatarUrl: String?
+        let imageUrl: String?
+        var resolvedURL: String? { avatar ?? avatarUrl ?? imageUrl }
+    }
+    let user: Inner?
+    let data: Inner?
+    var resolvedURL: String? { user?.resolvedURL ?? data?.resolvedURL }
+}
+
 // MARK: - Extensions for Conversion to Domain Models
 
 extension UserDTO {
@@ -623,7 +662,8 @@ extension UserDTO {
             rating: 0.0,
             totalReviews: 0,
             yearsOfExperience: 0,
-            isVerified: emailVerified ?? false
+            isVerified: emailVerified ?? false,
+            avatarURL: avatar
         )
     }
 }

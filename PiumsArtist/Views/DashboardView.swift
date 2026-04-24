@@ -9,6 +9,7 @@ import SwiftUI
 
 struct DashboardView: View {
     @StateObject private var viewModel = DashboardViewModel()
+    @StateObject private var authService = AuthService.shared
     @Environment(\.modelContext) private var modelContext
     @State private var showingNotifications = false
     @State private var showProfile = false
@@ -89,13 +90,17 @@ struct DashboardView: View {
     // MARK: - Header
     private var headerView: some View {
         HStack(spacing: 0) {
-            // Avatar
-            PiumsAvatarView(
-                name: "Artista",
-                imageURL: nil,
-                size: 42,
-                gradientColors: [.piumsOrange, .piumsAccent]
-            )
+            // Avatar → atajo a configurar perfil
+            Button { showProfile = true } label: {
+                PiumsAvatarView(
+                    name: authService.currentArtist?.name ?? "Artista",
+                    imageURL: authService.avatarURL,
+                    size: 42,
+                    gradientColors: [.piumsOrange, .piumsAccent]
+                )
+                .id(authService.avatarURL ?? "init")
+            }
+            .buttonStyle(.plain)
 
             Spacer()
 
@@ -520,7 +525,8 @@ private struct NotificationRow: View {
 
 // MARK: - Notifications ViewModel
 @MainActor
-final class NotificationsViewModel: ObservableObject {
+final
+class NotificationsViewModel: ObservableObject {
     @Published var notifications: [NotificationItem] = []
     @Published var isLoading = false
     @Published var errorMessage: String?

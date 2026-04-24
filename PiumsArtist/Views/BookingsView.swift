@@ -10,6 +10,7 @@ import SwiftData
 
 struct BookingsView: View {
     @StateObject private var viewModel = BookingsViewModel()
+    @StateObject private var authService = AuthService.shared
     @Environment(\.modelContext) private var modelContext
     @State private var selectedBooking: Booking?
     @State private var bookingToDecline: Booking?
@@ -71,9 +72,10 @@ struct BookingsView: View {
 
     private var topBar: some View {
         HStack {
-            PiumsAvatarView(name: AuthService.shared.currentArtist?.name ?? "A",
-                            imageURL: nil, size: 38,
+            PiumsAvatarView(name: authService.currentArtist?.name ?? "A",
+                            imageURL: authService.avatarURL, size: 38,
                             gradientColors: [.piumsOrange, .piumsAccent])
+            .id(authService.avatarURL ?? "init")
             Spacer()
             Image("PiumsLogo")
                 .resizable()

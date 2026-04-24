@@ -35,10 +35,10 @@ struct RegisterView: View {
             ZStack(alignment: .bottom) {
                 backgroundLayer(geo: geo)
                 registerCard
-                    .frame(height: geo.size.height * 0.78)
+                    .frame(maxHeight: geo.size.height * 0.62)
                     .offset(y: animateIn ? 0 : geo.size.height * 0.8)
             }
-            .ignoresSafeArea()
+            .ignoresSafeArea(.container)
         }
         .preferredColorScheme(.dark)
         .onAppear {
@@ -121,82 +121,96 @@ struct RegisterView: View {
                 .padding(.top, 14)
                 .padding(.bottom, 22)
 
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 22) {
+            ScrollViewReader { proxy in
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 22) {
 
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("Registro de Artista")
-                            .font(.system(size: 22, weight: .bold))
-                            .foregroundStyle(Color.piumsLabel)
-                        Text("Completa tu información para comenzar.")
-                            .font(.subheadline)
-                            .foregroundStyle(Color.piumsLabelSecondary)
-                    }
-
-                    HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: "info.circle.fill")
-                            .foregroundStyle(Color.piumsOrange)
-                            .font(.subheadline)
-                            .padding(.top, 1)
-                        Text("Tu cuenta requiere activación por el equipo de Piums. Una vez registrado recibirás confirmación a tu correo en 24-48 h.")
-                            .font(.caption)
-                            .foregroundStyle(Color.piumsLabelSecondary)
-                    }
-                    .padding(12)
-                    .background(Color.piumsOrange.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-
-                    VStack(spacing: 12) {
-                        inputField(label: "NOMBRE", placeholder: "Tu nombre completo",
-                                   text: $name, field: .name, next: .email,
-                                   keyboard: .default, content: .name)
-
-                        inputField(label: "CORREO", placeholder: "nombre@ejemplo.com",
-                                   text: $email, field: .email, next: .password,
-                                   keyboard: .emailAddress, content: .emailAddress)
-
-                        passwordField(label: "CONTRASEÑA", placeholder: "Mínimo 6 caracteres",
-                                      text: $password, show: $showPassword, field: .password, next: .confirm)
-
-                        passwordField(label: "CONFIRMAR CONTRASEÑA", placeholder: "Repite la contraseña",
-                                      text: $confirmPassword, show: $showConfirm, field: .confirm, next: nil)
-                    }
-
-                    // Error
-                    let errorMsg = localError ?? (authService.errorMessage ?? "")
-                    if !errorMsg.isEmpty {
-                        HStack(spacing: 8) {
-                            Image(systemName: "exclamationmark.circle.fill")
-                                .foregroundStyle(Color.piumsError)
-                            Text(errorMsg)
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(Color.piumsError)
-                            Spacer()
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("Registro de Artista")
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundStyle(Color.piumsLabel)
+                            Text("Completa tu información para comenzar.")
+                                .font(.subheadline)
+                                .foregroundStyle(Color.piumsLabelSecondary)
                         }
-                        .padding(14)
-                        .background(Color.piumsError.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                    }
 
-                    // Botón registrar
-                    registerButton
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: "info.circle.fill")
+                                .foregroundStyle(Color.piumsOrange)
+                                .font(.subheadline)
+                                .padding(.top, 1)
+                            Text("Tu cuenta requiere activación por el equipo de Piums. Una vez registrado recibirás confirmación a tu correo en 24-48 h.")
+                                .font(.caption)
+                                .foregroundStyle(Color.piumsLabelSecondary)
+                        }
+                        .padding(12)
+                        .background(Color.piumsOrange.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
 
-                    // Ya tengo cuenta
-                    HStack(spacing: 4) {
-                        Text("¿Ya tienes cuenta?")
-                            .font(.subheadline)
-                            .foregroundStyle(Color.piumsLabelSecondary)
-                        Button("Iniciar sesión") { dismiss() }
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Color.piumsOrange)
+                        VStack(spacing: 12) {
+                            inputField(label: "NOMBRE", placeholder: "Tu nombre completo",
+                                       text: $name, field: .name, next: .email,
+                                       keyboard: .default, content: .name)
+                                .id(Field.name)
+
+                            inputField(label: "CORREO", placeholder: "nombre@ejemplo.com",
+                                       text: $email, field: .email, next: .password,
+                                       keyboard: .emailAddress, content: .emailAddress)
+                                .id(Field.email)
+
+                            passwordField(label: "CONTRASEÑA", placeholder: "Mínimo 6 caracteres",
+                                          text: $password, show: $showPassword, field: .password, next: .confirm)
+                                .id(Field.password)
+
+                            passwordField(label: "CONFIRMAR CONTRASEÑA", placeholder: "Repite la contraseña",
+                                          text: $confirmPassword, show: $showConfirm, field: .confirm, next: nil)
+                                .id(Field.confirm)
+                        }
+
+                        // Error
+                        let errorMsg = localError ?? (authService.errorMessage ?? "")
+                        if !errorMsg.isEmpty {
+                            HStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.circle.fill")
+                                    .foregroundStyle(Color.piumsError)
+                                Text(errorMsg)
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundStyle(Color.piumsError)
+                                Spacer()
+                            }
+                            .padding(14)
+                            .background(Color.piumsError.opacity(0.1))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+
+                        // Botón registrar
+                        registerButton
+
+                        // Ya tengo cuenta
+                        HStack(spacing: 4) {
+                            Text("¿Ya tienes cuenta?")
+                                .font(.subheadline)
+                                .foregroundStyle(Color.piumsLabelSecondary)
+                            Button("Iniciar sesión") { dismiss() }
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(Color.piumsOrange)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.bottom, 8)
                     }
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.bottom, 8)
+                    .padding(.horizontal, 26)
+                    .padding(.bottom, 40)
                 }
-                .padding(.horizontal, 26)
-                .padding(.bottom, 40)
+                .scrollDismissesKeyboard(.interactively)
+                .onChange(of: focused) { _, newFocus in
+                    guard let field = newFocus else { return }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            proxy.scrollTo(field, anchor: .center)
+                        }
+                    }
+                }
             }
-            .scrollDismissesKeyboard(.interactively)
         }
         .background(
             RoundedRectangle(cornerRadius: 28)

@@ -55,9 +55,10 @@ final class Artist {
     var totalReviews: Int
     var yearsOfExperience: Int
     var isVerified: Bool
+    var avatarURL: String?
     var createdAt: Date
     var updatedAt: Date
-    
+
     init(
         name: String,
         email: String,
@@ -68,7 +69,8 @@ final class Artist {
         rating: Double = 0.0,
         totalReviews: Int = 0,
         yearsOfExperience: Int = 0,
-        isVerified: Bool = false
+        isVerified: Bool = false,
+        avatarURL: String? = nil
     ) {
         self.id = UUID()
         self.name = name
@@ -81,6 +83,7 @@ final class Artist {
         self.totalReviews = totalReviews
         self.yearsOfExperience = yearsOfExperience
         self.isVerified = isVerified
+        self.avatarURL = avatarURL
         self.createdAt = Date()
         self.updatedAt = Date()
     }

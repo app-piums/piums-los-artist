@@ -704,6 +704,7 @@ final class MessagesViewModel: ObservableObject {
 @MainActor
 final class ProfileViewModel: ObservableObject {
     @Published var artist: Artist?
+    @Published var avatarURL: String?
     @Published var services: [Service] = []
     @Published var statistics: ProfileStatistics = ProfileStatistics()
     @Published var isLoading = false
@@ -766,12 +767,18 @@ final class ProfileViewModel: ObservableObject {
             let stats = statsResp.stats
             
             // Convertir perfil a modelo local
+            let resolvedAvatar = profile.avatar ?? profile.imageUrl
             let currentArtist = AuthService.shared.currentArtist
             if let currentArtist = currentArtist {
                 currentArtist.rating = profile.rating ?? 0
                 currentArtist.totalReviews = profile.reviewsCount ?? 0
                 currentArtist.isVerified = profile.isVerified ?? false
                 if let bio = profile.bio { currentArtist.bio = bio }
+                if let url = resolvedAvatar { currentArtist.avatarURL = url }
+            }
+            if let url = resolvedAvatar {
+                self.avatarURL = url
+                AuthService.shared.avatarURL = url
             }
             self.artist = currentArtist ?? Artist(
                 name: profile.displayName,
@@ -781,7 +788,8 @@ final class ProfileViewModel: ObservableObject {
                 bio: profile.bio ?? "",
                 rating: profile.rating ?? 0,
                 totalReviews: profile.reviewsCount ?? 0,
-                isVerified: profile.isVerified ?? false
+                isVerified: profile.isVerified ?? false,
+                avatarURL: resolvedAvatar
             )
             
             self.services = servicesResp.services.map { $0.toDomainModel() }

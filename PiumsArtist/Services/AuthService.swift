@@ -17,6 +17,9 @@ final class AuthService: ObservableObject {
     
     @Published var isAuthenticated = false
     @Published var currentArtist: Artist?
+    @Published var avatarURL: String? {
+        didSet { UserDefaults.standard.set(avatarURL, forKey: "user_avatar_url") }
+    }
     @Published var isLoading = false
     @Published var errorMessage: String?
     /// true si el artista aún no ha enviado sus documentos de verificación
@@ -30,12 +33,15 @@ final class AuthService: ObservableObject {
     @AppStorage("remember_me") private var rememberMe: Bool = false
     
     private init() {
+        // Restore persisted avatar URL immediately (before any network call)
+        avatarURL = UserDefaults.standard.string(forKey: "user_avatar_url")
+
         // Listen to auth token changes
         apiService.$authToken
             .map { $0 != nil }
             .assign(to: \.isAuthenticated, on: self)
             .store(in: &cancellables)
-        
+
         // Auto-login if token exists
         if apiService.authToken != nil {
             Task {
@@ -68,6 +74,7 @@ final class AuthService: ObservableObject {
             
             // Store user data
             currentArtist = response.user.toDomainModel()
+            avatarURL = response.user.avatar
             
             // Store credentials if remember me is enabled
             if rememberMe {
@@ -117,6 +124,7 @@ final class AuthService: ObservableObject {
                 KeychainStore.save(refreshToken, key: "refresh_token")
             }
             currentArtist = response.user.toDomainModel()
+            avatarURL = response.user.avatar
             let expiresInSeconds = parseExpiresIn(response.expiresIn ?? "15m")
             scheduleTokenRefresh(expiresIn: expiresInSeconds)
             await checkVerificationStatus()
@@ -151,6 +159,7 @@ final class AuthService: ObservableObject {
                 rememberMe = false
                 
                 // Clear all stored session data
+                avatarURL = nil
                 KeychainStore.delete(key: "refresh_token")
                 UserDefaults.standard.removeObject(forKey: "artist_backend_id")
                 
@@ -225,8 +234,13 @@ final class AuthService: ObservableObject {
 
     private func fetchAndSaveArtistBackendId() async {
         do {
-            let dto = try await apiService.get(endpoint: .artistDashboard, responseType: ArtistProfileMinDTO.self)
+            let dto = try await apiService.get(endpoint: .artistDashboard, responseType: ArtistProfileResponseDTO.self)
             artistBackendId = dto.artist.id
+            let resolved = dto.artist.avatar ?? dto.artist.imageUrl
+            if let url = resolved {
+                avatarURL = url
+                currentArtist?.avatarURL = url
+            }
         } catch {
             print("[AUTH] fetchArtistBackendId error: \(error)")
         }
@@ -284,7 +298,8 @@ final class AuthService: ObservableObject {
             rating: currentArtist?.rating ?? 0.0,
             totalReviews: currentArtist?.totalReviews ?? 0,
             yearsOfExperience: currentArtist?.yearsOfExperience ?? 0,
-            isVerified: currentArtist?.isVerified ?? false
+            isVerified: currentArtist?.isVerified ?? false,
+            avatarURL: currentArtist?.avatarURL
         )
     }
     
@@ -354,16 +369,27 @@ final class AuthService: ObservableObject {
         isLoading = true
         errorMessage = nil
 
-        guard let windowScene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene }).first,
-              let rootViewController = windowScene.windows.first?.rootViewController else {
+        // iOS 15+ usa keyWindow; prefiere la escena activa en primer plano
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let activeScene = scenes.first(where: { $0.activationState == .foregroundActive }) ?? scenes.first
+
+        guard let window = activeScene?.keyWindow
+                        ?? activeScene?.windows.first(where: { $0.isKeyWindow })
+                        ?? activeScene?.windows.first,
+              let rootVC = window.rootViewController else {
             errorMessage = "No se pudo obtener la ventana de presentación"
             isLoading = false
             return
         }
 
+        // Subir hasta el view controller más alto (puede haber modales encima)
+        var presentingVC = rootVC
+        while let presented = presentingVC.presentedViewController {
+            presentingVC = presented
+        }
+
         do {
-            let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController)
+            let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: presentingVC)
 
             guard let idToken = result.user.idToken?.tokenString else {
                 errorMessage = "No se recibió el token de Google"
@@ -457,7 +483,7 @@ struct LoginView: View {
                 backgroundLayer(geo: geo)
                 loginCard
                     // maxHeight (no fijo) → la card se reduce cuando aparece el teclado
-                    .frame(maxHeight: geo.size.height * 0.78)
+                    .frame(maxHeight: geo.size.height * 0.55)
                     .offset(y: animateIn ? 0 : geo.size.height * 0.8)
             }
             // .container ignora bordes de pantalla pero respeta el teclado
@@ -492,44 +518,26 @@ struct LoginView: View {
                 .offset(y: geo.safeAreaInsets.top + 80)
 
             VStack(spacing: 0) {
-                Spacer().frame(height: geo.safeAreaInsets.top + 20)
+                Spacer().frame(height: geo.safeAreaInsets.top + 14)
 
                 Image("PiumsLogo")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(height: 52)
+                    .frame(height: 210)
                     .opacity(animateIn ? 1 : 0)
                     .animation(.easeOut(duration: 0.4), value: animateIn)
 
-                Spacer().frame(height: 24)
+                Spacer().frame(height: 14)
 
-                ZStack {
-                    Circle()
-                        .fill(Color.piumsOrange.opacity(0.15))
-                        .frame(width: 76, height: 76)
-                        .blur(radius: 10)
-                    Circle()
-                        .fill(Color.piumsBackgroundElevated)
-                        .frame(width: 62, height: 62)
-                        .overlay(Circle().fill(Color.piumsOrange.opacity(0.22)))
-                    Image(systemName: "music.microphone")
-                        .font(.system(size: 24, weight: .regular))
-                        .foregroundStyle(Color.piumsOrange)
-                }
-                .scaleEffect(animateIn ? 1 : 0.6)
-                .opacity(animateIn ? 1 : 0)
-                .animation(.spring(response: 0.55, dampingFraction: 0.7).delay(0.08), value: animateIn)
-
-                Spacer().frame(height: 20)
-
-                VStack(spacing: 6) {
-                    Text("Panel de Artistas")
+                VStack(spacing: 8) {
+                    Text("Comparte tu talento")
                         .font(.system(size: 26, weight: .bold))
                         .foregroundStyle(.white)
-                    Text("Gestiona tu carrera creativa")
+                    Text("Conecta con tu audiencia y\nhaz crecer tu carrera")
                         .font(.system(size: 14))
-                        .foregroundStyle(Color.white.opacity(0.5))
+                        .foregroundStyle(Color.white.opacity(0.55))
                         .multilineTextAlignment(.center)
+                        .lineSpacing(3)
                 }
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.45).delay(0.15), value: animateIn)
@@ -550,34 +558,44 @@ struct LoginView: View {
                 .padding(.top, 14)
                 .padding(.bottom, 24)
 
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 0) {
-                    switch loginStep {
-                    case .email:
-                        emailPanel
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .leading).combined(with: .opacity),
-                                removal: .move(edge: .leading).combined(with: .opacity)
-                            ))
-                    case .password:
-                        passwordPanel
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .trailing).combined(with: .opacity),
-                                removal: .move(edge: .trailing).combined(with: .opacity)
-                            ))
-                    case .social:
-                        socialPanel
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .trailing).combined(with: .opacity),
-                                removal: .move(edge: .trailing).combined(with: .opacity)
-                            ))
+            ScrollViewReader { proxy in
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        switch loginStep {
+                        case .email:
+                            emailPanel
+                                .transition(.asymmetric(
+                                    insertion: .move(edge: .leading).combined(with: .opacity),
+                                    removal: .move(edge: .leading).combined(with: .opacity)
+                                ))
+                        case .password:
+                            passwordPanel
+                                .transition(.asymmetric(
+                                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                                    removal: .move(edge: .trailing).combined(with: .opacity)
+                                ))
+                        case .social:
+                            socialPanel
+                                .transition(.asymmetric(
+                                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                                    removal: .move(edge: .trailing).combined(with: .opacity)
+                                ))
+                        }
+                    }
+                    .animation(.spring(response: 0.45, dampingFraction: 0.85), value: loginStep)
+                    .padding(.horizontal, 26)
+                    .padding(.bottom, 50)
+                }
+                .scrollDismissesKeyboard(.interactively)
+                .onChange(of: focused) { _, newFocus in
+                    guard let field = newFocus else { return }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            proxy.scrollTo(field, anchor: .center)
+                        }
                     }
                 }
-                .animation(.spring(response: 0.45, dampingFraction: 0.85), value: loginStep)
-                .padding(.horizontal, 26)
-                .padding(.bottom, 50)
             }
-            .scrollDismissesKeyboard(.interactively)
         }
         .background(
             RoundedRectangle(cornerRadius: 28)
@@ -597,6 +615,7 @@ struct LoginView: View {
             }
 
             fieldEmail
+                .id(LoginField.email)
 
             if let msg = authService.errorMessage {
                 errorBanner(msg)
@@ -659,6 +678,7 @@ struct LoginView: View {
             }
 
             fieldPassword
+                .id(LoginField.password)
 
             if let msg = authService.errorMessage {
                 errorBanner(msg)

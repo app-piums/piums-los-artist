@@ -25,22 +25,44 @@ enum ArtistOnboardingStep: Int, CaseIterable {
 
 struct DisciplineOption: Identifiable {
     let id: String; let name: String; let subtitle: String; let emoji: String; let systemImage: String
+    let specialties: [String]
+
+    init(id: String, name: String, subtitle: String, emoji: String, systemImage: String, specialties: [String] = []) {
+        self.id = id; self.name = name; self.subtitle = subtitle
+        self.emoji = emoji; self.systemImage = systemImage; self.specialties = specialties
+    }
+
     static let all: [DisciplineOption] = [
-        .init(id:"musician",         name:"Músico",               subtitle:"Cantante, Compositor, Banda",    emoji:"🎵", systemImage:"music.microphone"),
-        .init(id:"dj",               name:"DJ / Productor",       subtitle:"Electrónica, Beat Maker",        emoji:"🎧", systemImage:"hifispeaker.fill"),
-        .init(id:"photographer",     name:"Fotógrafo",            subtitle:"Eventos, Retratos, Producto",    emoji:"📷", systemImage:"camera.fill"),
-        .init(id:"filmmaker",        name:"Videógrafo",           subtitle:"Clips, Eventos, Comerciales",    emoji:"🎬", systemImage:"video.fill"),
-        .init(id:"graphic-designer", name:"Diseñador Gráfico",    subtitle:"Marca, Flyers, Portadas",        emoji:"🎨", systemImage:"pencil.and.ruler.fill"),
-        .init(id:"illustrator",      name:"Ilustrador",           subtitle:"Arte digital, Portadas",         emoji:"✏️", systemImage:"paintbrush.pointed.fill"),
-        .init(id:"dancer",           name:"Bailarín / Coreógrafo",subtitle:"Urbano, Clásico, Show",          emoji:"💃", systemImage:"figure.dance"),
-        .init(id:"mc",               name:"Animador / MC",        subtitle:"Bodas, Eventos, Conciertos",     emoji:"🎤", systemImage:"person.wave.2.fill"),
-        .init(id:"writer",           name:"Escritor / Letrista",  subtitle:"Letras, Guiones, Contenidos",    emoji:"📝", systemImage:"text.quote"),
-        .init(id:"tattooist",        name:"Tatuador",             subtitle:"Tattoo, Body Art, Piercing",     emoji:"🖋️", systemImage:"paintbrush.fill"),
-        .init(id:"makeup",           name:"Maquillador",          subtitle:"Bodas, Cine, FX, Pasarela",      emoji:"💄", systemImage:"sparkle"),
-        .init(id:"painter",          name:"Pintor / Artista",     subtitle:"Lienzo, Mural, Acuarela",        emoji:"🖌️", systemImage:"paintpalette.fill"),
-        .init(id:"sculptor",         name:"Escultor",             subtitle:"Cerámica, Madera, Metal",        emoji:"🏺", systemImage:"cube.fill"),
-        .init(id:"magician",         name:"Mago / Ilusionista",   subtitle:"Close-up, Shows, Escenario",     emoji:"🪄", systemImage:"sparkles"),
-        .init(id:"acrobat",          name:"Acróbata / Circo",     subtitle:"Malabares, Aéreos, Fuego",       emoji:"🎪", systemImage:"figure.gymnastics"),
+        .init(id:"musician",         name:"Músico",               subtitle:"Cantante, Compositor, Banda",    emoji:"🎵", systemImage:"music.microphone",
+              specialties:["Cantante/Solista","Guitarrista","Bajista","Baterista","Violinista","Saxofonista","Trompetista","Chelista","Acordeonista","Percusionista","Arpista","Banda Musical","Mariachi","Marimba","Grupo Acústico","Trío/Cuarteto","Rapero/Freestyle","Productor Musical"]),
+        .init(id:"dj",               name:"DJ / Productor",       subtitle:"Electrónica, Beat Maker",        emoji:"🎧", systemImage:"hifispeaker.fill",
+              specialties:["DJ Comercial","DJ de Bodas","DJ de Club","Productor de Beat","Productor Musical","Remixer"]),
+        .init(id:"photographer",     name:"Fotógrafo",            subtitle:"Eventos, Retratos, Producto",    emoji:"📷", systemImage:"camera.fill",
+              specialties:["Fotografía de Bodas","Fotografía de Eventos","Fotografía de Retrato","Fotografía de Producto","Fotografía de Moda","Fotografía Documental","Fotografía Aérea"]),
+        .init(id:"filmmaker",        name:"Videógrafo",           subtitle:"Clips, Eventos, Comerciales",    emoji:"🎬", systemImage:"video.fill",
+              specialties:["Video de Bodas","Video de Eventos","Cinematografía","Video Comercial","Video Clip Musical","Content Creator"]),
+        .init(id:"graphic-designer", name:"Diseñador Gráfico",    subtitle:"Marca, Flyers, Portadas",        emoji:"🎨", systemImage:"pencil.and.ruler.fill",
+              specialties:["Branding e Identidad","Diseño Editorial","Motion Graphics","UI/UX","Flyers y Publicidad","Diseño de Packaging"]),
+        .init(id:"illustrator",      name:"Ilustrador",           subtitle:"Arte digital, Portadas",         emoji:"✏️", systemImage:"paintbrush.pointed.fill",
+              specialties:["Ilustración Digital","Cómic y Manga","Arte Conceptual","Portadas de Álbum","Ilustración de Libros","Character Design"]),
+        .init(id:"dancer",           name:"Bailarín / Coreógrafo",subtitle:"Urbano, Clásico, Show",          emoji:"💃", systemImage:"figure.dance",
+              specialties:["Urbano/Hip-hop","Salsa y Cumbia","Ballet Clásico","Contemporáneo","Folclórico","Show y Entretenimiento"]),
+        .init(id:"mc",               name:"Animador / MC",        subtitle:"Bodas, Eventos, Conciertos",     emoji:"🎤", systemImage:"person.wave.2.fill",
+              specialties:["MC de Bodas","MC Corporativo","MC de Fiestas","Animador Infantil","Host de Shows"]),
+        .init(id:"writer",           name:"Escritor / Letrista",  subtitle:"Letras, Guiones, Contenidos",    emoji:"📝", systemImage:"text.quote",
+              specialties:["Letrista Musical","Guionista","Copywriter","Escritor de Contenido","Poeta","Storyteller"]),
+        .init(id:"tattooist",        name:"Tatuador",             subtitle:"Tattoo, Body Art, Piercing",     emoji:"🖋️", systemImage:"paintbrush.fill",
+              specialties:["Tatuaje Realista","Tatuaje Tradicional","Tatuaje Minimalista","Tatuaje Geométrico","Tatuaje Acuarela","Body Art"]),
+        .init(id:"makeup",           name:"Maquillador",          subtitle:"Bodas, Cine, FX, Pasarela",      emoji:"💄", systemImage:"sparkle",
+              specialties:["Maquillaje de Bodas","Maquillaje Artístico","Maquillaje de Pasarela","Maquillaje de Cine","Efectos Especiales FX"]),
+        .init(id:"painter",          name:"Pintor / Artista",     subtitle:"Lienzo, Mural, Acuarela",        emoji:"🖌️", systemImage:"paintpalette.fill",
+              specialties:["Pintura al Óleo","Acuarela","Arte Acrílico","Mural","Arte Abstracto","Retrato Artístico"]),
+        .init(id:"sculptor",         name:"Escultor",             subtitle:"Cerámica, Madera, Metal",        emoji:"🏺", systemImage:"cube.fill",
+              specialties:["Cerámica y Arcilla","Escultura en Madera","Escultura en Metal","Escultura en Piedra"]),
+        .init(id:"magician",         name:"Mago / Ilusionista",   subtitle:"Close-up, Shows, Escenario",     emoji:"🪄", systemImage:"sparkles",
+              specialties:["Magia Close-up","Show de Magia","Mentalismo","Ilusionismo de Escenario","Magia Infantil"]),
+        .init(id:"acrobat",          name:"Acróbata / Circo",     subtitle:"Malabares, Aéreos, Fuego",       emoji:"🎪", systemImage:"figure.gymnastics",
+              specialties:["Malabares","Acrobacia Aérea","Show de Fuego","Equilibrismo","Acrobacia en Tela","Performance Circense"]),
         .init(id:"other",            name:"Otro",                 subtitle:"Otro talento creativo",          emoji:"⚡", systemImage:"star.fill"),
     ]
     // Category mapping → backend enum
@@ -109,6 +131,8 @@ final class ArtistOnboardingViewModel: ObservableObject {
 
     // Step 2
     @Published var selectedDiscipline: DisciplineOption? = nil
+    @Published var selectedSpecialty: String? = nil
+    @Published var customRole = ""
     @Published var searchQuery = ""
 
     // Step 3
@@ -150,6 +174,63 @@ final class ArtistOnboardingViewModel: ObservableObject {
     var canContinueStep2: Bool { selectedDiscipline != nil }
     var canContinueStep5: Bool { !shortBio.trimmingCharacters(in: .whitespaces).isEmpty }
     var canContinueStep6: Bool { !serviceName.trimmingCharacters(in: .whitespaces).isEmpty && !serviceDescription.isEmpty }
+
+    var showCustomRoleField: Bool {
+        guard let disc = selectedDiscipline else { return false }
+        return disc.specialties.isEmpty || selectedSpecialty == nil
+    }
+
+    func selectDiscipline(_ disc: DisciplineOption) {
+        selectedDiscipline = disc
+        selectedSpecialty = nil
+        customRole = ""
+    }
+
+    func preFillService() {
+        guard serviceName.isEmpty, serviceCategory.isEmpty, serviceDescription.isEmpty,
+              let disc = selectedDiscipline else { return }
+        let role = selectedSpecialty ?? (customRole.trimmingCharacters(in: .whitespaces).isEmpty ? disc.name : customRole)
+        let suffix = serviceSuffix(for: disc.id)
+        serviceName = suffix.isEmpty ? role : "\(role) / \(suffix)"
+        serviceCategory = suggestedCategory(for: disc.id)
+        serviceDescription = "Ofrezco mis servicios profesionales como \(role.lowercased())."
+    }
+
+    private func serviceSuffix(for id: String) -> String {
+        switch id {
+        case "musician":        return "Sesión Musical"
+        case "dj":              return "Evento DJ"
+        case "photographer":    return "Sesión Fotográfica"
+        case "filmmaker":       return "Producción de Video"
+        case "graphic-designer":return "Proyecto de Diseño"
+        case "illustrator":     return "Proyecto de Ilustración"
+        case "dancer":          return "Show de Baile"
+        case "mc":              return "Animación de Evento"
+        case "writer":          return "Proyecto de Escritura"
+        case "tattooist":       return "Sesión de Tatuaje"
+        case "makeup":          return "Sesión de Maquillaje"
+        case "painter":         return "Obra de Arte"
+        case "sculptor":        return "Pieza de Escultura"
+        case "magician":        return "Show de Magia"
+        case "acrobat":         return "Show de Circo"
+        default:                return ""
+        }
+    }
+
+    private func suggestedCategory(for id: String) -> String {
+        switch id {
+        case "musician":        return "Música en vivo"
+        case "dj":              return "DJ para eventos"
+        case "photographer":    return "Fotografía de eventos"
+        case "filmmaker":       return "Videografía y edición"
+        case "graphic-designer":return "Diseño gráfico y branding"
+        case "illustrator":     return "Ilustración digital"
+        case "dancer":          return "Baile y coreografía"
+        case "mc":              return "Animación de eventos"
+        case "writer":          return "Escritura y guiones"
+        default:                return ""
+        }
+    }
 
     // Navigation
     func next() {
@@ -516,13 +597,22 @@ private struct OnbDisciplineStep: View {
                 LazyVGrid(columns:columns, spacing:12) {
                     ForEach(vm.filteredDisciplines) { disc in
                         DisciplineCard(disc:disc, isSelected: vm.selectedDiscipline?.id == disc.id) {
-                            vm.selectedDiscipline = disc
+                            vm.selectDiscipline(disc)
                         }
                     }
                 }
-                .padding(.horizontal,24).padding(.bottom,100)
+                .padding(.horizontal,24).padding(.bottom,8)
+
+                if let disc = vm.selectedDiscipline {
+                    SpecialtySection(vm: vm, disc: disc)
+                        .padding(.horizontal,24)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+
+                Color.clear.frame(height:100)
             }
             .scrollIndicators(.hidden)
+            .animation(.easeInOut(duration:0.3), value: vm.selectedDiscipline?.id)
         }
         .background(Color(.systemBackground).ignoresSafeArea())
         .safeAreaInset(edge:.bottom) {
@@ -584,6 +674,65 @@ private struct DisciplineCard: View {
         }
         .buttonStyle(.plain)
         .animation(.easeInOut(duration: 0.18), value: isSelected)
+    }
+}
+
+private struct SpecialtySection: View {
+    @ObservedObject var vm: ArtistOnboardingViewModel
+    let disc: DisciplineOption
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if !disc.specialties.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("ESPECIALIDAD")
+                        .font(.caption.weight(.semibold)).foregroundStyle(.secondary).tracking(0.5)
+                    FlexWrap(spacing: 8) {
+                        ForEach(disc.specialties, id: \.self) { spec in
+                            let isActive = vm.selectedSpecialty == spec
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.15)) {
+                                    vm.selectedSpecialty = isActive ? nil : spec
+                                    if !isActive { vm.customRole = "" }
+                                }
+                            } label: {
+                                HStack(spacing: 5) {
+                                    if isActive { Image(systemName: "checkmark").font(.caption2.bold()) }
+                                    Text(spec).font(.subheadline.weight(.medium))
+                                }
+                                .foregroundStyle(isActive ? .white : .primary)
+                                .padding(.horizontal, 14).padding(.vertical, 8)
+                                .background(Capsule().fill(isActive ? Color.piumsOrange : Color(.secondarySystemBackground)))
+                                .overlay(Capsule().stroke(isActive ? Color.clear : Color(.systemGray4), lineWidth: 1))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+
+            if vm.showCustomRoleField {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("ESPECIFICA TU ROL")
+                            .font(.caption.weight(.semibold)).foregroundStyle(.secondary).tracking(0.5)
+                        Spacer()
+                        Text("\(vm.customRole.count)/60")
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }
+                    TextField("Ej: Vocalista de jazz, Compositor indie…", text: $vm.customRole)
+                        .padding(.horizontal, 14).padding(.vertical, 12)
+                        .background(Color(.systemGray6)).cornerRadius(10)
+                        .onChange(of: vm.customRole) { _, new in
+                            if new.count > 60 { vm.customRole = String(new.prefix(60)) }
+                        }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .padding(.vertical, 16)
+        .animation(.easeInOut(duration: 0.2), value: vm.showCustomRoleField)
+        .animation(.easeInOut(duration: 0.15), value: vm.selectedSpecialty)
     }
 }
 
@@ -721,8 +870,9 @@ private struct OnbPortfolioStep: View {
 // MARK: - Step 5: Primer Servicio
 
 private let serviceCategories = [
-    "Música en Vivo","DJ & Electrónica","Fotografía","Video","Diseño Gráfico",
-    "Producción Musical","Danza","Tatuaje","Magia","Arte Visual","Escritura","Maquillaje","Otro"
+    "Música en vivo","DJ para eventos","Fotografía de eventos","Fotografía de retrato",
+    "Videografía y edición","Contenido para redes sociales","Diseño gráfico y branding",
+    "Ilustración digital","Escritura y guiones","Baile y coreografía","Animación de eventos","Otro"
 ]
 
 private struct OnbServiceStep: View {
@@ -740,6 +890,7 @@ private struct OnbServiceStep: View {
                         Text("Crea el servicio principal que ofrecerás a tus clientes.")
                             .font(.subheadline).foregroundStyle(.secondary)
                     }
+                    .onAppear { vm.preFillService() }
 
                     // Service name
                     labeledField("NOMBRE DEL SERVICIO") {

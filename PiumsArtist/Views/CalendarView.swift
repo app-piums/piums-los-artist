@@ -25,6 +25,7 @@ enum DayStatus {
 // MARK: - CalendarView
 struct CalendarView: View {
     @StateObject private var viewModel = CalendarViewModel()
+    @StateObject private var authService = AuthService.shared
     @State private var selectedDate = Date()
     @State private var currentMonth = Date()
     @State private var showBlockSheet = false
@@ -67,8 +68,10 @@ struct CalendarView: View {
     // MARK: - Top Bar
     private var topBar: some View {
         HStack {
-            PiumsAvatarView(name: "A", imageURL: nil, size: 38,
+            PiumsAvatarView(name: authService.currentArtist?.name ?? "A",
+                            imageURL: authService.avatarURL, size: 38,
                             gradientColors: [.piumsOrange, .piumsAccent])
+            .id(authService.avatarURL ?? "init")
             Spacer()
             Image("PiumsLogo")
                 .resizable()

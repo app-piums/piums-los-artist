@@ -6,6 +6,7 @@
 import SwiftUI
 
 struct MoreMenuView: View {
+    @StateObject private var authService = AuthService.shared
     @State private var showProfile = false
     @State private var showServices = false
     @State private var showAbsences = false
@@ -26,11 +27,12 @@ struct MoreMenuView: View {
 
                         HStack(spacing: 14) {
                             PiumsAvatarView(
-                                name: AuthService.shared.currentArtist?.name ?? "A",
-                                imageURL: nil,
+                                name: authService.currentArtist?.name ?? "A",
+                                imageURL: authService.avatarURL,
                                 size: 50,
                                 gradientColors: [.piumsOrange, .piumsAccent]
                             )
+                            .id(authService.avatarURL ?? "init")
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(AuthService.shared.currentArtist?.name ?? "Artista")
                                     .font(.headline)

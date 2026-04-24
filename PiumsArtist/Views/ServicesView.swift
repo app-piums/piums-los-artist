@@ -11,6 +11,7 @@ import Combine
 
 struct ServicesView: View {
     @StateObject private var viewModel = ServicesViewModel()
+    @StateObject private var authService = AuthService.shared
     @State private var showAddService = false
     @State private var showEditService = false
     @State private var selectedService: Service?
@@ -68,8 +69,10 @@ struct ServicesView: View {
     // MARK: - Top Bar
     private var topBar: some View {
         HStack {
-            PiumsAvatarView(name: "A", imageURL: nil, size: 38,
+            PiumsAvatarView(name: authService.currentArtist?.name ?? "A",
+                            imageURL: authService.avatarURL, size: 38,
                             gradientColors: [.piumsOrange, .piumsAccent])
+            .id(authService.avatarURL ?? "init")
             Spacer()
             Image("PiumsLogo")
                 .resizable()

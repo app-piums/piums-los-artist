@@ -34,9 +34,22 @@
 		798D74662F8D6F32007CA264 /* PiumsArtistUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PiumsArtistUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		0CF89D1C16774546B3E54211 /* PiumsArtist exceptions */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 798D744C2F8D6F30007CA264 /* PiumsArtist */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		798D744F2F8D6F30007CA264 /* PiumsArtist */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				0CF89D1C16774546B3E54211 /* PiumsArtist exceptions */,
+			);
 			path = PiumsArtist;
 			sourceTree = "<group>";
 		};
@@ -206,10 +219,10 @@
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 798D744E2F8D6F30007CA264 /* Products */;
-			packages = (
-				A1FB3E442F9D7A31008BC275 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
-				A1FB3E452F9D7A31008BC275 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
-			);
+			packageReferences = (
+					A1FB3E442F9D7A31008BC275 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+					A1FB3E452F9D7A31008BC275 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (

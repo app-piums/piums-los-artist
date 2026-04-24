@@ -49,18 +49,13 @@ enum KeychainStore {
 // MARK: - API Configuration
 struct APIConfig {
     static let baseURL = "https://piums.com/api"
-    static let stagingURL = "https://staging.piums.com/api"
+    static let stagingURL = "https://backend.piums.io/api"
     static let localURL = "http://localhost:3000/api"
 
-    // Simulator DEBUG → localhost (servidor del Mac).
-    // Dispositivo físico DEBUG → staging HTTPS (localhost no es alcanzable desde hardware real).
-    // Release → producción.
+    // DEBUG (simulador y dispositivo físico) → backend.piums.io
+    // Release → producción
     #if DEBUG
-        #if targetEnvironment(simulator)
-        static let currentURL = localURL
-        #else
-        static let currentURL = stagingURL
-        #endif
+    static let currentURL = stagingURL
     #else
     static let currentURL = baseURL
     #endif
@@ -110,6 +105,7 @@ enum APIEndpoint {
     
     // Absences
     case createArtistProfile
+    case updateArtistProfile
     case setArtistAvailability
     case getAvailability
     case getBlockedSlots(artistId: String)
@@ -278,6 +274,8 @@ enum APIEndpoint {
             
         case .createArtistProfile:
             return "/artists/dashboard/me/profile"
+        case .updateArtistProfile:
+            return "/artists/dashboard/me"
         case .setArtistAvailability:
             return "/artists/dashboard/me/availability"
         case .getAvailability:
@@ -598,7 +596,9 @@ final class APIService: ObservableObject {
                     }
                     throw APIError.unauthorized
                 case 403:
-                    throw APIError.forbidden
+                    let msg = (try? decoder.decode([String: String].self, from: data))?["message"]
+                           ?? (try? decoder.decode([String: String].self, from: data))?["error"]
+                    throw msg != nil ? APIError.httpError(403, msg!) : APIError.forbidden
                 case 404:
                     throw APIError.notFound
                 case 429:
