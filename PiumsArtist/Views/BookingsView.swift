@@ -482,12 +482,18 @@ struct ArtistBookingDetailView: View {
     @StateObject private var authService = AuthService.shared
     @State private var enrichedClientName: String?
     @State private var enrichedClientEmail: String?
+    @State private var clientFetchDone = false
 
+    private var hasClientInfo: Bool {
+        !booking.clientName.isEmpty && booking.clientName != "Cliente"
+    }
     private var displayClientName: String {
-        enrichedClientName ?? booking.clientName
+        if let name = enrichedClientName { return name }
+        if !clientFetchDone && booking.clientName.hasPrefix("Cliente ···") { return "Cargando..." }
+        return booking.clientName
     }
     private var displayClientEmail: String {
-        enrichedClientEmail ?? booking.clientEmail
+        enrichedClientEmail ?? (booking.clientName.hasPrefix("Cliente ···") ? "" : booking.clientEmail)
     }
 
     var body: some View {
@@ -545,7 +551,7 @@ struct ArtistBookingDetailView: View {
                                 imageURL: authService.avatarURL,
                                 gradientColors: [.piumsOrange, .piumsAccent]
                             )
-                            if !displayClientName.isEmpty && !displayClientName.hasPrefix("Cliente ···") {
+                            if hasClientInfo {
                                 Divider().padding(.vertical, 10)
                                 participantRow(
                                     role: "CLIENTE",
@@ -638,26 +644,35 @@ struct ArtistBookingDetailView: View {
     }
 
     private func fetchBookingDetail() async {
-        guard !booking.remoteId.isEmpty,
-              let url = URL(string: APIConfig.currentURL + "/artists/dashboard/me/bookings/\(booking.remoteId)") else { return }
-        var req = URLRequest(url: url)
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let token = APIService.shared.authToken {
-            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        guard let (data, _) = try? await URLSession.shared.data(for: req) else { return }
+        defer { Task { await MainActor.run { clientFetchDone = true } } }
+        guard !booking.remoteId.isEmpty else { return }
 
+        let token = APIService.shared.authToken
         let decoder = JSONDecoder()
-        let dto: BookingDTO? = (try? decoder.decode(BookingDTO.self, from: data))
-            ?? (try? decoder.decode(BookingDetailWrapper.self, from: data))?.booking
 
-        guard let dto else { return }
-        let name = dto.resolvedClientName
-        let email = dto.resolvedClientEmail
-        if !name.hasPrefix("Cliente ···") && name != "Cliente" {
-            await MainActor.run {
-                enrichedClientName = name
-                enrichedClientEmail = email.isEmpty ? nil : email
+        for urlString in [
+            APIConfig.currentURL + "/artists/dashboard/me/bookings/\(booking.remoteId)",
+            APIConfig.currentURL + "/bookings/\(booking.remoteId)"
+        ] {
+            guard let url = URL(string: urlString) else { continue }
+            var req = URLRequest(url: url)
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            if let t = token { req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization") }
+
+            guard let (data, _) = try? await URLSession.shared.data(for: req) else { continue }
+
+            let dto: BookingDTO? = (try? decoder.decode(BookingDTO.self, from: data))
+                ?? (try? decoder.decode(BookingDetailWrapper.self, from: data))?.booking
+
+            guard let dto else { continue }
+            let name = dto.resolvedClientName
+            let email = dto.resolvedClientEmail
+            if !name.hasPrefix("Cliente ···") && name != "Cliente" {
+                await MainActor.run {
+                    enrichedClientName = name
+                    enrichedClientEmail = email.isEmpty ? nil : email
+                }
+                return
             }
         }
     }
