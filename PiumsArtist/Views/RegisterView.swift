@@ -40,8 +40,6 @@ struct RegisterView: View {
             }
             .ignoresSafeArea(.container)
         }
-        .preferredColorScheme(.dark)
-        .environment(\.colorScheme, .dark)
         .onAppear {
             withAnimation(.spring(response: 0.75, dampingFraction: 0.88).delay(0.05)) { animateIn = true }
             withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true).delay(0.3)) { glowPulse = true }
@@ -98,10 +96,10 @@ struct RegisterView: View {
                 VStack(spacing: 4) {
                     Text("Crea tu cuenta")
                         .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.piumsLabel)
                     Text("Únete a la comunidad de artistas")
                         .font(.system(size: 13))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(Color.piumsLabelSecondary)
                 }
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.45).delay(0.15), value: animateIn)
@@ -117,7 +115,7 @@ struct RegisterView: View {
     private var registerCard: some View {
         VStack(spacing: 0) {
             RoundedRectangle(cornerRadius: 3)
-                .fill(Color.white.opacity(0.18))
+                .fill(Color(.systemFill))
                 .frame(width: 36, height: 4)
                 .padding(.top, 14)
                 .padding(.bottom, 22)
@@ -306,7 +304,7 @@ struct RegisterView: View {
             .frame(maxWidth: .infinity).frame(height: 54)
             .background(LinearGradient(
                 colors: empty
-                    ? [Color.piumsOrange.opacity(0.4), Color.piumsOrange.opacity(0.4)]
+                    ? [Color(.systemFill), Color(.systemFill)]
                     : [Color(red: 0.85, green: 0.38, blue: 0.12), Color(red: 0.72, green: 0.28, blue: 0.07)],
                 startPoint: .topLeading, endPoint: .bottomTrailing))
             .foregroundStyle(.white)

@@ -490,8 +490,6 @@ struct LoginView: View {
             // .container ignora bordes de pantalla pero respeta el teclado
             .ignoresSafeArea(.container)
         }
-        .preferredColorScheme(.dark)
-        .environment(\.colorScheme, .dark)
         .onAppear {
             email = authService.artistEmail
             withAnimation(.spring(response: 0.75, dampingFraction: 0.88).delay(0.05)) { animateIn = true }
@@ -502,8 +500,8 @@ struct LoginView: View {
         } message: {
             Text(authService.errorMessage ?? "")
         }
-        .fullScreenCover(isPresented: $showRegister) { RegisterView().environment(\.colorScheme, .dark) }
-        .sheet(isPresented: $showForgotPassword) { ForgotPasswordView().environment(\.colorScheme, .dark) }
+        .fullScreenCover(isPresented: $showRegister) { RegisterView() }
+        .sheet(isPresented: $showForgotPassword) { ForgotPasswordView() }
     }
 
     // MARK: - Background
@@ -534,10 +532,10 @@ struct LoginView: View {
                 VStack(spacing: 8) {
                     Text("Comparte tu talento")
                         .font(.system(size: 26, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.piumsLabel)
                     Text("Conecta con tu audiencia y\nhaz crecer tu carrera")
                         .font(.system(size: 14))
-                        .foregroundStyle(Color.white.opacity(0.55))
+                        .foregroundStyle(Color.piumsLabelSecondary)
                         .multilineTextAlignment(.center)
                         .lineSpacing(3)
                 }
@@ -555,7 +553,7 @@ struct LoginView: View {
     private var loginCard: some View {
         VStack(spacing: 0) {
             RoundedRectangle(cornerRadius: 3)
-                .fill(Color.white.opacity(0.18))
+                .fill(Color(.systemFill))
                 .frame(width: 36, height: 4)
                 .padding(.top, 14)
                 .padding(.bottom, 24)
@@ -730,7 +728,7 @@ struct LoginView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 14))
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)
-                            .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+                            .strokeBorder(Color(.separator), lineWidth: 1)
                     )
             }
 
@@ -779,7 +777,7 @@ struct LoginView: View {
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                    .strokeBorder(Color(.separator), lineWidth: 1)
             )
         }
         .disabled(authService.isLoading)
@@ -880,7 +878,7 @@ struct LoginView: View {
                 LinearGradient(
                     colors: enabled
                         ? [Color(red: 0.85, green: 0.38, blue: 0.12), Color(red: 0.72, green: 0.28, blue: 0.07)]
-                        : [Color.piumsOrange.opacity(0.4), Color.piumsOrange.opacity(0.4)],
+                        : [Color(.systemFill), Color(.systemFill)],
                     startPoint: .topLeading, endPoint: .bottomTrailing
                 )
             )
@@ -911,7 +909,7 @@ struct LoginView: View {
             .background(
                 LinearGradient(
                     colors: empty
-                        ? [Color.piumsOrange.opacity(0.4), Color.piumsOrange.opacity(0.4)]
+                        ? [Color(.systemFill), Color(.systemFill)]
                         : [Color(red: 0.85, green: 0.38, blue: 0.12), Color(red: 0.72, green: 0.28, blue: 0.07)],
                     startPoint: .topLeading, endPoint: .bottomTrailing
                 )
