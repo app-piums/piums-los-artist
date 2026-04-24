@@ -650,6 +650,7 @@ struct ArtistBookingDetailView: View {
         let token = APIService.shared.authToken
         let decoder = JSONDecoder()
 
+        // Intento 1 y 2: endpoints de booking (pueden devolver datos del cliente)
         for urlString in [
             APIConfig.currentURL + "/artists/dashboard/me/bookings/\(booking.remoteId)",
             APIConfig.currentURL + "/bookings/\(booking.remoteId)"
@@ -658,21 +659,51 @@ struct ArtistBookingDetailView: View {
             var req = URLRequest(url: url)
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             if let t = token { req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization") }
-
             guard let (data, _) = try? await URLSession.shared.data(for: req) else { continue }
 
             let dto: BookingDTO? = (try? decoder.decode(BookingDTO.self, from: data))
                 ?? (try? decoder.decode(BookingDetailWrapper.self, from: data))?.booking
-
             guard let dto else { continue }
             let name = dto.resolvedClientName
             let email = dto.resolvedClientEmail
             if !name.hasPrefix("Cliente ···") && name != "Cliente" {
-                await MainActor.run {
-                    enrichedClientName = name
-                    enrichedClientEmail = email.isEmpty ? nil : email
-                }
+                await MainActor.run { enrichedClientName = name; enrichedClientEmail = email.isEmpty ? nil : email }
                 return
+            }
+        }
+
+        // Intento 3: perfil del usuario por su ID (GET /api/users/:clientId)
+        guard !booking.clientId.isEmpty,
+              let url = URL(string: APIConfig.currentURL + "/users/\(booking.clientId)") else { return }
+        var req = URLRequest(url: url)
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let t = token { req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization") }
+        guard let (data, _) = try? await URLSession.shared.data(for: req) else { return }
+
+        struct UserDTO: Decodable {
+            let name: String?; let nombre: String?; let email: String?
+            let firstName: String?; let lastName: String?
+            struct Nested: Decodable {
+                let name: String?; let nombre: String?; let email: String?
+                let firstName: String?; let lastName: String?
+                var displayName: String? {
+                    let parts = [firstName, lastName].compactMap { $0?.isEmpty == false ? $0 : nil }
+                    return nombre ?? name ?? (parts.isEmpty ? nil : parts.joined(separator: " "))
+                }
+            }
+            let user: Nested?; let data: Nested?
+            var displayName: String? {
+                let parts = [firstName, lastName].compactMap { $0?.isEmpty == false ? $0 : nil }
+                return user?.displayName ?? data?.displayName
+                    ?? nombre ?? name ?? (parts.isEmpty ? nil : parts.joined(separator: " "))
+            }
+            var resolvedEmail: String? { user?.email ?? data?.email ?? email }
+        }
+        if let dto = try? decoder.decode(UserDTO.self, from: data),
+           let name = dto.displayName, !name.isEmpty {
+            await MainActor.run {
+                enrichedClientName = name
+                enrichedClientEmail = dto.resolvedEmail
             }
         }
     }

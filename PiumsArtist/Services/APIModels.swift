@@ -776,6 +776,7 @@ extension BookingDTO {
             clientName: resolvedClientName,
             clientEmail: resolvedClientEmail,
             clientPhone: client?.phone ?? clientPhone ?? "",
+            clientId: clientId ?? "",
             clientAvatar: client?.avatar ?? clientAvatar,
             artistName: resolvedArtistName,
             artistEmail: resolvedArtistEmail,
