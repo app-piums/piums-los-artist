@@ -479,6 +479,7 @@ struct ArtistBookingDetailView: View {
     let onReject: () -> Void
     let onComplete: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var authService = AuthService.shared
 
     var body: some View {
         NavigationView {
@@ -525,11 +526,11 @@ struct ArtistBookingDetailView: View {
                             participantRow(
                                 role: "ARTISTA",
                                 name: booking.artistName.isEmpty
-                                    ? (AuthService.shared.currentArtist?.name ?? "Artista")
+                                    ? (authService.currentArtist?.name ?? "Artista")
                                     : booking.artistName,
-                                email: AuthService.shared.currentArtist?.email ?? "",
-                                systemImage: "music.microphone",
-                                color: .piumsOrange
+                                email: authService.currentArtist?.email ?? "",
+                                imageURL: authService.avatarURL,
+                                gradientColors: [.piumsOrange, .piumsAccent]
                             )
                             if !booking.clientName.isEmpty && booking.clientName != "Cliente" {
                                 Divider().padding(.vertical, 10)
@@ -537,8 +538,8 @@ struct ArtistBookingDetailView: View {
                                     role: "CLIENTE",
                                     name: booking.clientName,
                                     email: booking.clientEmail,
-                                    systemImage: "person.fill",
-                                    color: .piumsInfo
+                                    imageURL: booking.clientAvatar,
+                                    gradientColors: [.piumsInfo, .blue]
                                 )
                             }
                         }
@@ -644,14 +645,9 @@ struct ArtistBookingDetailView: View {
     }
 
     @ViewBuilder
-    private func participantRow(role: String, name: String, email: String, systemImage: String, color: Color) -> some View {
+    private func participantRow(role: String, name: String, email: String, imageURL: String? = nil, gradientColors: [Color]) -> some View {
         HStack(spacing: 12) {
-            ZStack {
-                Circle().fill(color.opacity(0.12)).frame(width: 42, height: 42)
-                Image(systemName: systemImage)
-                    .font(.system(size: 18))
-                    .foregroundStyle(color)
-            }
+            PiumsAvatarView(name: name, imageURL: imageURL, size: 42, gradientColors: gradientColors)
             VStack(alignment: .leading, spacing: 3) {
                 Text(role)
                     .font(.system(size: 9, weight: .semibold))

@@ -123,6 +123,7 @@ final class AuthService: ObservableObject {
             if let refreshToken = response.refreshToken {
                 KeychainStore.save(refreshToken, key: "refresh_token")
             }
+            UserDefaults.standard.set(false, forKey: "hasSeenArtistOnboarding")
             currentArtist = response.user.toDomainModel()
             avatarURL = response.user.avatar
             let expiresInSeconds = parseExpiresIn(response.expiresIn ?? "15m")
