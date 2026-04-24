@@ -542,8 +542,8 @@ struct ArtistBookingDetailView: View {
                                     role: "CLIENTE",
                                     name: booking.clientName,
                                     email: booking.clientEmail,
-                                    imageURL: booking.clientAvatar,
-                                    gradientColors: [.piumsInfo, .blue]
+                                    gradientColors: [.piumsInfo],
+                                    systemIcon: "person.fill"
                                 )
                             }
                         }
@@ -649,9 +649,16 @@ struct ArtistBookingDetailView: View {
     }
 
     @ViewBuilder
-    private func participantRow(role: String, name: String, email: String, imageURL: String? = nil, gradientColors: [Color]) -> some View {
+    private func participantRow(role: String, name: String, email: String, imageURL: String? = nil, gradientColors: [Color], systemIcon: String? = nil) -> some View {
         HStack(spacing: 12) {
-            PiumsAvatarView(name: name, imageURL: imageURL, size: 42, gradientColors: gradientColors)
+            if let icon = systemIcon {
+                ZStack {
+                    Circle().fill(gradientColors.first?.opacity(0.12) ?? Color.blue.opacity(0.12)).frame(width: 42, height: 42)
+                    Image(systemName: icon).font(.system(size: 18)).foregroundStyle(gradientColors.first ?? .blue)
+                }
+            } else {
+                PiumsAvatarView(name: name, imageURL: imageURL, size: 42, gradientColors: gradientColors)
+            }
             VStack(alignment: .leading, spacing: 3) {
                 Text(role)
                     .font(.system(size: 9, weight: .semibold))
