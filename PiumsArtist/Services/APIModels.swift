@@ -274,19 +274,25 @@ struct BookingDTO: Codable {
     let clientEmail: String?
     let clientPhone: String?
     let clientAvatar: String?
-    // Objetos anidados (algunos backends los devuelven así)
+    // Objetos anidados — el backend puede usar cualquiera de estos nombres
     let client: BookingClientDTO?
+    let user: BookingClientDTO?     // algunos endpoints lo llaman "user"
+    let cliente: BookingClientDTO?  // nombre en español
     let artist: BookingArtistDTO?
     let createdAt: String?
     let updatedAt: String?
 
+    private var resolvedClientDTO: BookingClientDTO? { client ?? user ?? cliente }
+
     /// Nombre del cliente resuelto desde cualquier formato del backend
     var resolvedClientName: String {
-        client?.displayName ?? clientName ?? (clientId.map { "Cliente ···\($0.suffix(6))" }) ?? "Cliente"
+        if let n = resolvedClientDTO?.displayName, n != "Cliente" { return n }
+        if let n = clientName, !n.isEmpty { return n }
+        return clientId.map { "Cliente ···\($0.suffix(6))" } ?? "Cliente"
     }
     /// Email del cliente resuelto
     var resolvedClientEmail: String {
-        client?.email ?? clientEmail ?? ""
+        resolvedClientDTO?.resolvedEmail ?? clientEmail ?? ""
     }
     /// Nombre del artista resuelto desde cualquier formato del backend
     var resolvedArtistName: String {
@@ -393,10 +399,23 @@ struct BookingClientDTO: Codable {
     let id: String?
     let nombre: String?
     let name: String?
+    let fullName: String?
+    let firstName: String?
+    let lastName: String?
     let email: String?
+    let correo: String?
     let phone: String?
     let avatar: String?
-    var displayName: String { nombre ?? name ?? email ?? "Cliente" }
+
+    var displayName: String {
+        if let n = nombre, !n.isEmpty { return n }
+        if let n = fullName, !n.isEmpty { return n }
+        if let n = name, !n.isEmpty { return n }
+        let parts = [firstName, lastName].compactMap { $0?.isEmpty == false ? $0 : nil }
+        if !parts.isEmpty { return parts.joined(separator: " ") }
+        return email ?? correo ?? "Cliente"
+    }
+    var resolvedEmail: String { email ?? correo ?? "" }
 }
 
 struct BookingArtistDTO: Codable {
