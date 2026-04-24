@@ -482,18 +482,16 @@ struct ArtistBookingDetailView: View {
     @StateObject private var authService = AuthService.shared
     @State private var enrichedClientName: String?
     @State private var enrichedClientEmail: String?
-    @State private var clientFetchDone = false
+    @State private var isLoadingClient = true
 
-    private var hasClientInfo: Bool {
-        !booking.clientName.isEmpty && booking.clientName != "Cliente"
-    }
+    // Un booking tiene cliente si el API devolvió un clientId (siempre existe)
+    private var hasClientInfo: Bool { !booking.clientId.isEmpty }
+
     private var displayClientName: String {
-        if let name = enrichedClientName { return name }
-        if !clientFetchDone && booking.clientName.hasPrefix("Cliente ···") { return "Cargando..." }
-        return booking.clientName
+        enrichedClientName ?? (isLoadingClient ? "Cargando..." : "Cliente")
     }
     private var displayClientEmail: String {
-        enrichedClientEmail ?? (booking.clientName.hasPrefix("Cliente ···") ? "" : booking.clientEmail)
+        isLoadingClient ? "" : (enrichedClientEmail ?? "")
     }
 
     var body: some View {
@@ -644,7 +642,7 @@ struct ArtistBookingDetailView: View {
     }
 
     private func fetchBookingDetail() async {
-        defer { Task { await MainActor.run { clientFetchDone = true } } }
+        defer { Task { await MainActor.run { isLoadingClient = false } } }
         guard !booking.remoteId.isEmpty else { return }
 
         let token = APIService.shared.authToken
