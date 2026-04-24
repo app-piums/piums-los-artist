@@ -313,6 +313,10 @@ struct ArtistBookingsResponseDTO: Codable {
     let artistId: String?
 }
 
+struct BookingDetailWrapper: Codable {
+    let booking: BookingDTO
+}
+
 // Respuesta de /artists/dashboard/me/stats
 struct ArtistStatsResponseDTO: Codable {
     let stats: ArtistStatsDTO

@@ -480,6 +480,15 @@ struct ArtistBookingDetailView: View {
     let onComplete: () -> Void
     @Environment(\.dismiss) private var dismiss
     @StateObject private var authService = AuthService.shared
+    @State private var enrichedClientName: String?
+    @State private var enrichedClientEmail: String?
+
+    private var displayClientName: String {
+        enrichedClientName ?? booking.clientName
+    }
+    private var displayClientEmail: String {
+        enrichedClientEmail ?? booking.clientEmail
+    }
 
     var body: some View {
         NavigationView {
@@ -536,12 +545,12 @@ struct ArtistBookingDetailView: View {
                                 imageURL: authService.avatarURL,
                                 gradientColors: [.piumsOrange, .piumsAccent]
                             )
-                            if !booking.clientName.isEmpty && booking.clientName != "Cliente" {
+                            if !displayClientName.isEmpty && !displayClientName.hasPrefix("Cliente ···") {
                                 Divider().padding(.vertical, 10)
                                 participantRow(
                                     role: "CLIENTE",
-                                    name: booking.clientName,
-                                    email: booking.clientEmail,
+                                    name: displayClientName,
+                                    email: displayClientEmail,
                                     gradientColors: [.piumsInfo],
                                     systemIcon: "person.fill"
                                 )
@@ -623,6 +632,32 @@ struct ArtistBookingDetailView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cerrar") { dismiss() }
                 }
+            }
+            .task { await fetchBookingDetail() }
+        }
+    }
+
+    private func fetchBookingDetail() async {
+        guard !booking.remoteId.isEmpty,
+              let url = URL(string: APIConfig.currentURL + "/artists/dashboard/me/bookings/\(booking.remoteId)") else { return }
+        var req = URLRequest(url: url)
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = APIService.shared.authToken {
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        guard let (data, _) = try? await URLSession.shared.data(for: req) else { return }
+
+        let decoder = JSONDecoder()
+        let dto: BookingDTO? = (try? decoder.decode(BookingDTO.self, from: data))
+            ?? (try? decoder.decode(BookingDetailWrapper.self, from: data))?.booking
+
+        guard let dto else { return }
+        let name = dto.resolvedClientName
+        let email = dto.resolvedClientEmail
+        if !name.hasPrefix("Cliente ···") && name != "Cliente" {
+            await MainActor.run {
+                enrichedClientName = name
+                enrichedClientEmail = email.isEmpty ? nil : email
             }
         }
     }

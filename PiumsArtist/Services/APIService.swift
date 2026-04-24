@@ -98,6 +98,7 @@ enum APIEndpoint {
     case artistDashboard
     case artistStats
     case artistBookings(status: String? = nil, page: Int? = nil, artistId: String? = nil)
+    case artistBookingDetail(String)
     case acceptBooking(String)
     case declineBooking(String)
     case completeBooking(String)
@@ -263,6 +264,8 @@ enum APIEndpoint {
             if let page = page { params.append("page=\(page)") }
             if !params.isEmpty { path += "?" + params.joined(separator: "&") }
             return path
+        case .artistBookingDetail(let id):
+            return "/artists/dashboard/me/bookings/\(id)"
         case .acceptBooking(let id):
             return "/artists/dashboard/me/bookings/\(id)/accept"
         case .declineBooking(let id):
