@@ -676,9 +676,7 @@ struct ArtistBookingDetailView: View {
         var req = URLRequest(url: url)
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let t = token { req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization") }
-        guard let (data, response) = try? await URLSession.shared.data(for: req) else { return }
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        print("👤 /users/\(booking.clientId) → \(status): \(String(data: data, encoding: .utf8) ?? "?")")
+        guard let (data, _) = try? await URLSession.shared.data(for: req) else { return }
 
         struct UserDTO: Decodable {
             let name: String?; let nombre: String?; let email: String?
