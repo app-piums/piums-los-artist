@@ -491,6 +491,7 @@ struct LoginView: View {
             .ignoresSafeArea(.container)
         }
         .preferredColorScheme(.dark)
+        .environment(\.colorScheme, .dark)
         .onAppear {
             email = authService.artistEmail
             withAnimation(.spring(response: 0.75, dampingFraction: 0.88).delay(0.05)) { animateIn = true }
@@ -501,8 +502,8 @@ struct LoginView: View {
         } message: {
             Text(authService.errorMessage ?? "")
         }
-        .fullScreenCover(isPresented: $showRegister) { RegisterView() }
-        .sheet(isPresented: $showForgotPassword) { ForgotPasswordView() }
+        .fullScreenCover(isPresented: $showRegister) { RegisterView().environment(\.colorScheme, .dark) }
+        .sheet(isPresented: $showForgotPassword) { ForgotPasswordView().environment(\.colorScheme, .dark) }
     }
 
     // MARK: - Background

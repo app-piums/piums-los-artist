@@ -41,6 +41,7 @@ struct RegisterView: View {
             .ignoresSafeArea(.container)
         }
         .preferredColorScheme(.dark)
+        .environment(\.colorScheme, .dark)
         .onAppear {
             withAnimation(.spring(response: 0.75, dampingFraction: 0.88).delay(0.05)) { animateIn = true }
             withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true).delay(0.3)) { glowPulse = true }
