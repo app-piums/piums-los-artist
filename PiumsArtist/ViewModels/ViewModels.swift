@@ -356,9 +356,18 @@ final class CalendarViewModel: ObservableObject {
     
     @MainActor
     func blockTimeSlot(date: Date, reason: String) async {
-        guard let artistId = AuthService.shared.artistBackendId else {
-            errorMessage = "Perfil de artista no disponible. Reinicia sesión."
-            return
+        let artistId: String
+        if let saved = AuthService.shared.artistBackendId, !saved.isEmpty {
+            artistId = saved
+        } else {
+            do {
+                let dto = try await APIService.shared.get(endpoint: .artistDashboard, responseType: ArtistProfileResponseDTO.self)
+                AuthService.shared.artistBackendId = dto.artist.id
+                artistId = dto.artist.id
+            } catch {
+                errorMessage = error.localizedDescription
+                return
+            }
         }
         isLoading = true
 
@@ -409,9 +418,17 @@ final class CalendarViewModel: ObservableObject {
 
     @MainActor
     private func loadBlockedSlots() async {
-        guard let artistId = AuthService.shared.artistBackendId else {
-            errorMessage = "Perfil de artista no disponible. Reinicia sesión."
-            return
+        let artistId: String
+        if let saved = AuthService.shared.artistBackendId, !saved.isEmpty {
+            artistId = saved
+        } else {
+            do {
+                let dto = try await APIService.shared.get(endpoint: .artistDashboard, responseType: ArtistProfileResponseDTO.self)
+                AuthService.shared.artistBackendId = dto.artist.id
+                artistId = dto.artist.id
+            } catch {
+                return  // sin artistId no hay slots que cargar — fallo silencioso
+            }
         }
 
         let isoFull = ISO8601DateFormatter()
