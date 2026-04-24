@@ -274,8 +274,9 @@ struct BookingDTO: Codable {
     let clientEmail: String?
     let clientPhone: String?
     let clientAvatar: String?
-    // Objeto anidado de cliente (otros backends lo devuelven así)
+    // Objetos anidados (algunos backends los devuelven así)
     let client: BookingClientDTO?
+    let artist: BookingArtistDTO?
     let createdAt: String?
     let updatedAt: String?
 
@@ -286,6 +287,14 @@ struct BookingDTO: Codable {
     /// Email del cliente resuelto
     var resolvedClientEmail: String {
         client?.email ?? clientEmail ?? ""
+    }
+    /// Nombre del artista resuelto desde cualquier formato del backend
+    var resolvedArtistName: String {
+        artist?.displayName ?? artistName ?? ""
+    }
+    /// Email del artista resuelto
+    var resolvedArtistEmail: String {
+        artist?.email ?? ""
     }
 }
 
@@ -388,6 +397,16 @@ struct BookingClientDTO: Codable {
     let phone: String?
     let avatar: String?
     var displayName: String { nombre ?? name ?? email ?? "Cliente" }
+}
+
+struct BookingArtistDTO: Codable {
+    let id: String?
+    let nombre: String?
+    let name: String?
+    let artistName: String?
+    let email: String?
+    let avatar: String?
+    var displayName: String { artistName ?? nombre ?? name ?? "Artista" }
 }
 
 struct BookingServiceDTO: Codable {
@@ -735,7 +754,8 @@ extension BookingDTO {
             clientEmail: resolvedClientEmail,
             clientPhone: client?.phone ?? clientPhone ?? "",
             clientAvatar: client?.avatar ?? clientAvatar,
-            artistName: artistName ?? "",
+            artistName: resolvedArtistName,
+            artistEmail: resolvedArtistEmail,
             scheduledDate: scheduledAt,
             duration: durationMinutes ?? 60,
             totalPrice: total,

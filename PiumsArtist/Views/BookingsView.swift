@@ -523,12 +523,16 @@ struct ArtistBookingDetailView: View {
                     // Participantes
                     detailCard("Participantes") {
                         VStack(spacing: 0) {
+                            let artistName = booking.artistName.isEmpty
+                                ? (authService.currentArtist?.name ?? "Artista")
+                                : booking.artistName
+                            let artistEmail = booking.artistEmail.isEmpty
+                                ? (authService.currentArtist?.email ?? "")
+                                : booking.artistEmail
                             participantRow(
                                 role: "ARTISTA",
-                                name: booking.artistName.isEmpty
-                                    ? (authService.currentArtist?.name ?? "Artista")
-                                    : booking.artistName,
-                                email: authService.currentArtist?.email ?? "",
+                                name: artistName,
+                                email: artistEmail,
                                 imageURL: authService.avatarURL,
                                 gradientColors: [.piumsOrange, .piumsAccent]
                             )

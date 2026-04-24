@@ -143,6 +143,7 @@ final class Booking: Identifiable, Hashable {
     var clientPhone: String
     var clientAvatar: String?
     var artistName: String
+    var artistEmail: String
     var scheduledDate: Date
     var duration: Int
     var status: BookingStatus
@@ -163,6 +164,7 @@ final class Booking: Identifiable, Hashable {
         clientPhone: String = "",
         clientAvatar: String? = nil,
         artistName: String = "",
+        artistEmail: String = "",
         scheduledDate: Date,
         duration: Int,
         totalPrice: Double,
@@ -178,6 +180,7 @@ final class Booking: Identifiable, Hashable {
         self.clientPhone = clientPhone
         self.clientAvatar = clientAvatar
         self.artistName = artistName
+        self.artistEmail = artistEmail
         self.scheduledDate = scheduledDate
         self.duration = duration
         self.status = status
