@@ -269,8 +269,24 @@ struct BookingDTO: Codable {
     let cancellationReason: String?
     let serviceName: String?     // nombre del servicio reservado
     let artistName: String?
+    // Campos planos de cliente (algunos backends los devuelven así)
+    let clientName: String?
+    let clientEmail: String?
+    let clientPhone: String?
+    let clientAvatar: String?
+    // Objeto anidado de cliente (otros backends lo devuelven así)
+    let client: BookingClientDTO?
     let createdAt: String?
     let updatedAt: String?
+
+    /// Nombre del cliente resuelto desde cualquier formato del backend
+    var resolvedClientName: String {
+        client?.displayName ?? clientName ?? (clientId.map { "Cliente ···\($0.suffix(6))" }) ?? "Cliente"
+    }
+    /// Email del cliente resuelto
+    var resolvedClientEmail: String {
+        client?.email ?? clientEmail ?? ""
+    }
 }
 
 // Respuesta de /artists/dashboard/me/bookings
@@ -369,6 +385,8 @@ struct BookingClientDTO: Codable {
     let nombre: String?
     let name: String?
     let email: String?
+    let phone: String?
+    let avatar: String?
     var displayName: String { nombre ?? name ?? email ?? "Cliente" }
 }
 
@@ -713,9 +731,11 @@ extension BookingDTO {
 
         return Booking(
             remoteId: id,
-            clientName: serviceName ?? code ?? "Cliente",
-            clientEmail: clientNotes ?? "",
-            clientPhone: "",
+            clientName: resolvedClientName,
+            clientEmail: resolvedClientEmail,
+            clientPhone: client?.phone ?? clientPhone ?? "",
+            clientAvatar: client?.avatar ?? clientAvatar,
+            artistName: artistName ?? "",
             scheduledDate: scheduledAt,
             duration: durationMinutes ?? 60,
             totalPrice: total,

@@ -353,13 +353,24 @@ struct ArtistBookingRow: View {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(booking.clientName)
+                        Text(booking.serviceName ?? booking.clientName)
                             .font(.subheadline.bold())
                             .lineLimit(1)
-                        if let code = booking.bookingCode {
-                            Text(code)
-                                .font(.caption2.monospaced())
-                                .foregroundColor(.secondary)
+                        HStack(spacing: 4) {
+                            if booking.clientName != "Cliente" && !booking.clientName.isEmpty {
+                                Text(booking.clientName)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            if let code = booking.bookingCode {
+                                if booking.clientName != "Cliente" && !booking.clientName.isEmpty {
+                                    Text("·").font(.caption).foregroundStyle(.secondary)
+                                }
+                                Text(code)
+                                    .font(.caption2.monospaced())
+                                    .foregroundColor(.secondary)
+                            }
                         }
                     }
                     Spacer()
@@ -508,6 +519,31 @@ struct ArtistBookingDetailView: View {
                         .padding(.horizontal, 20)
                     }
 
+                    // Participantes
+                    detailCard("Participantes") {
+                        VStack(spacing: 0) {
+                            participantRow(
+                                role: "ARTISTA",
+                                name: booking.artistName.isEmpty
+                                    ? (AuthService.shared.currentArtist?.name ?? "Artista")
+                                    : booking.artistName,
+                                email: AuthService.shared.currentArtist?.email ?? "",
+                                systemImage: "music.microphone",
+                                color: .piumsOrange
+                            )
+                            if !booking.clientName.isEmpty && booking.clientName != "Cliente" {
+                                Divider().padding(.vertical, 10)
+                                participantRow(
+                                    role: "CLIENTE",
+                                    name: booking.clientName,
+                                    email: booking.clientEmail,
+                                    systemImage: "person.fill",
+                                    color: .piumsInfo
+                                )
+                            }
+                        }
+                    }
+
                     // Info evento
                     detailCard("Información del Evento") {
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
@@ -605,6 +641,34 @@ struct ArtistBookingDetailView: View {
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func participantRow(role: String, name: String, email: String, systemImage: String, color: Color) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle().fill(color.opacity(0.12)).frame(width: 42, height: 42)
+                Image(systemName: systemImage)
+                    .font(.system(size: 18))
+                    .foregroundStyle(color)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(role)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .tracking(0.8)
+                Text(name)
+                    .font(.subheadline.bold())
+                    .lineLimit(1)
+                if !email.isEmpty {
+                    Text(email)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer()
+        }
     }
 
     @ViewBuilder
