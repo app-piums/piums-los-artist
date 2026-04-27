@@ -482,16 +482,27 @@ struct ArtistBookingDetailView: View {
     @StateObject private var authService = AuthService.shared
     @State private var enrichedClientName: String?
     @State private var enrichedClientEmail: String?
-    @State private var isLoadingClient = true
+    @State private var isLoadingClient: Bool
+
+    init(booking: Booking, onAccept: @escaping () -> Void, onReject: @escaping () -> Void, onComplete: @escaping () -> Void) {
+        self.booking = booking
+        self.onAccept = onAccept
+        self.onReject = onReject
+        self.onComplete = onComplete
+        let hasName = !booking.clientName.isEmpty && !booking.clientName.hasPrefix("Cliente")
+        _enrichedClientName = State(initialValue: hasName ? booking.clientName : nil)
+        _enrichedClientEmail = State(initialValue: booking.clientEmail.isEmpty ? nil : booking.clientEmail)
+        _isLoadingClient = State(initialValue: !hasName)
+    }
 
     // Un booking tiene cliente si el API devolvió un clientId (siempre existe)
     private var hasClientInfo: Bool { !booking.clientId.isEmpty }
 
     private var displayClientName: String {
-        enrichedClientName ?? (isLoadingClient ? "Cargando..." : "Cliente")
+        enrichedClientName ?? "Cliente"
     }
     private var displayClientEmail: String {
-        isLoadingClient ? "" : (enrichedClientEmail ?? "")
+        enrichedClientEmail ?? ""
     }
 
     var body: some View {
@@ -555,8 +566,8 @@ struct ArtistBookingDetailView: View {
                                     role: "CLIENTE",
                                     name: displayClientName,
                                     email: displayClientEmail,
-                                    gradientColors: [.piumsInfo],
-                                    systemIcon: "person.fill"
+                                    gradientColors: [.piumsInfo, .blue],
+                                    isLoading: isLoadingClient
                                 )
                             }
                         }
@@ -637,7 +648,7 @@ struct ArtistBookingDetailView: View {
                     Button("Cerrar") { dismiss() }
                 }
             }
-            .task { await fetchBookingDetail() }
+            .task { if isLoadingClient { await fetchBookingDetail() } }
         }
     }
 
@@ -728,29 +739,43 @@ struct ArtistBookingDetailView: View {
     }
 
     @ViewBuilder
-    private func participantRow(role: String, name: String, email: String, imageURL: String? = nil, gradientColors: [Color], systemIcon: String? = nil) -> some View {
+    private func participantRow(role: String, name: String, email: String, imageURL: String? = nil, gradientColors: [Color], isLoading: Bool = false) -> some View {
         HStack(spacing: 12) {
-            if let icon = systemIcon {
-                ZStack {
-                    Circle().fill(gradientColors.first?.opacity(0.12) ?? Color.blue.opacity(0.12)).frame(width: 42, height: 42)
-                    Image(systemName: icon).font(.system(size: 18)).foregroundStyle(gradientColors.first ?? .blue)
+            ZStack {
+                PiumsAvatarView(
+                    name: isLoading ? "·" : (name.isEmpty ? "?" : name),
+                    imageURL: imageURL,
+                    size: 42,
+                    gradientColors: gradientColors
+                )
+                if isLoading {
+                    Circle()
+                        .fill(Color(.systemBackground).opacity(0.55))
+                        .frame(width: 42, height: 42)
+                    ProgressView()
+                        .scaleEffect(0.65)
+                        .tint(gradientColors.first ?? .blue)
                 }
-            } else {
-                PiumsAvatarView(name: name, imageURL: imageURL, size: 42, gradientColors: gradientColors)
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(role)
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(.secondary)
                     .tracking(0.8)
-                Text(name)
-                    .font(.subheadline.bold())
-                    .lineLimit(1)
-                if !email.isEmpty {
-                    Text(email)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                if isLoading {
+                    Text("Cargando nombre...")
+                        .font(.subheadline.bold())
+                        .redacted(reason: .placeholder)
+                } else {
+                    Text(name)
+                        .font(.subheadline.bold())
                         .lineLimit(1)
+                    if !email.isEmpty {
+                        Text(email)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
             }
             Spacer()
