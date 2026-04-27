@@ -413,6 +413,7 @@ struct ArtistOnboardingView: View {
 
 private struct OnbTopBar: View {
     let vm: ArtistOnboardingViewModel
+    var skipOverride: (() -> Void)? = nil
     var body: some View {
         HStack {
             Button(action: vm.back) {
@@ -423,8 +424,11 @@ private struct OnbTopBar: View {
             Text("Paso \(vm.step.rawValue) de \(vm.totalSteps)")
                 .font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
             Spacer()
-            Button("Omitir") { Task { await vm.skip() } }
-                .font(.subheadline).foregroundStyle(.secondary)
+            Button("Omitir") {
+                if let override = skipOverride { override() }
+                else { Task { await vm.skip() } }
+            }
+            .font(.subheadline).foregroundStyle(.secondary)
         }
         .padding(.horizontal, 20).padding(.vertical, 14)
     }
@@ -877,10 +881,11 @@ private let serviceCategories = [
 
 private struct OnbServiceStep: View {
     @ObservedObject var vm: ArtistOnboardingViewModel
+    @State private var showSkipAlert = false
 
     var body: some View {
         VStack(spacing:0) {
-            OnbTopBar(vm:vm)
+            OnbTopBar(vm: vm, skipOverride: { showSkipAlert = true })
             OnbProgressBar(value:vm.progressValue).padding(.horizontal,24).padding(.top,4).padding(.bottom,20)
 
             ScrollView {
@@ -891,6 +896,30 @@ private struct OnbServiceStep: View {
                             .font(.subheadline).foregroundStyle(.secondary)
                     }
                     .onAppear { vm.preFillService() }
+
+                    // Alerta: servicio requerido para aparecer en búsquedas
+                    HStack(alignment:.top, spacing:12) {
+                        Image(systemName:"exclamationmark.triangle.fill")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.piumsOrange)
+                            .padding(.top, 1)
+                        VStack(alignment:.leading, spacing:3) {
+                            Text("Necesitas al menos un servicio")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(Color.piumsLabel)
+                            Text("Sin un servicio activo no aparecerás en las búsquedas de los clientes y no podrás recibir reservas.")
+                                .font(.caption)
+                                .foregroundStyle(Color.piumsOrange.opacity(0.85))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .padding(14)
+                    .background(Color.piumsOrange.opacity(0.10))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.piumsOrange.opacity(0.3), lineWidth: 1)
+                    )
 
                     // Service name
                     labeledField("NOMBRE DEL SERVICIO") {
@@ -937,7 +966,13 @@ private struct OnbServiceStep: View {
         .background(Color(.systemBackground).ignoresSafeArea())
         .safeAreaInset(edge:.bottom) {
             OnbContinueBar(label:"Continuar →", canContinue:vm.canContinueStep6, isLoading:false,
-                           action:vm.next, skip:{ Task { await vm.skip() } })
+                           action:vm.next, skip:{ showSkipAlert = true })
+        }
+        .alert("¿Continuar sin servicio?", isPresented: $showSkipAlert) {
+            Button("Crear mi servicio", role: .cancel) { }
+            Button("Omitir de todas formas", role: .destructive) { Task { await vm.skip() } }
+        } message: {
+            Text("Sin al menos un servicio activo no aparecerás en las búsquedas de los clientes y no podrás recibir reservas.")
         }
     }
 
